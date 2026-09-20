@@ -3,6 +3,8 @@
 ## 2026-09-19
 Put the Skill Atlas and the shared team memory design under version control. Until now all of it, the atlas itself, the tool that builds it, every design document, and the database plan, lived in one folder on one laptop with no backup anywhere. That included the written record of what had already been tried and what broke, which is the expensive part to lose.
 
+The step by step build plan for the memory layer is in here too, under `.claude/handoffs/`. It is written so a fresh session with no memory of this work can pick it up cold, which also makes it the quickest way for a person to get back up to speed after time away from it.
+
 The old employer-branded copy of the hub was deliberately left out and is now ignored by git, so it cannot be added by accident later. It stays on the machine, it just does not go into this repository.
 
 ## 2026-08-10
