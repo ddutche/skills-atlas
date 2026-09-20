@@ -1,0 +1,40 @@
+{
+  "hub_name": "Skill Atlas",
+  "hub_name_note": "Shown in the atlas header. Code.gs has its own HUB_NAME for the browser tab; set both.",
+  "atlas_file": "atlas.html",
+  "generator": "tools/generate-atlas/generate-atlas.mjs",
+  "person_id_rule": "lowercase, no spaces, stable forever. Other people's installed references point at it.",
+
+  "departments_note": "A starting set, not a fixed taxonomy. Replace these with whatever your org actually calls its teams; the atlas builds its filters and its upload form from this list, so adding a team is one line here and nothing else.",
+
+  "departments": [
+    "Sales",
+    "Solutions Engineering",
+    "Customer Success",
+    "Product",
+    "Engineering",
+    "Marketing",
+    "Finance",
+    "Operations",
+    "Human Resources",
+    "IT",
+    "Other"
+  ],
+
+  "disciplines": [
+    { "id": "engineering",      "label": "Engineering",     "slot": 1 },
+    { "id": "sales",            "label": "Sales & GTM",     "slot": 2 },
+    { "id": "ui-ux",            "label": "UI / UX",         "slot": 3 },
+    { "id": "writing",          "label": "Writing",         "slot": 4 },
+    { "id": "data",             "label": "Data & Analysis", "slot": 5 },
+    { "id": "finance",          "label": "Finance",         "slot": 6 },
+    { "id": "security",         "label": "Security",        "slot": 7 },
+    { "id": "machine-learning", "label": "Machine Learning", "slot": 8 },
+    { "id": "operations",       "label": "Operations",      "slot": 0 },
+    { "id": "general",          "label": "General purpose", "slot": 0 }
+  ],
+
+  "colour_note": "slot 1-8 map to the eight categorical colours in the map view; slot 0 renders neutral. Eight is the ceiling, not a preference: the palette was validated for colour-blind separation and only clears its floors up to eight hues, and only when chips render in this fixed order. Reordering this list changes which colours sit next to each other, so re-run the validator if you do. Every chip carries its label regardless, so colour is never the only signal.",
+
+  "note": "Departments and disciplines are edited here and nowhere else. The generator reads this file and the atlas builds its filters and its upload form from it, so adding a team means adding one line."
+}

@@ -1,0 +1,2548 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Skill Atlas</title>
+<style>
+  :root {
+    --bg: #ffffff;
+    --surface: #fafafa;
+    --surface-2: #f4f4f5;
+    --border: #e4e4e7;
+    --border-strong: #d4d4d8;
+    --text: #18181b;
+    --text-2: #52525b;
+    --text-3: #8b8b93;
+    --accent: #1d4ed8;
+    --accent-bg: #eff4ff;
+    --focus: #1d4ed8;
+    --danger: #b91c1c;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #0c0c0e;
+      --surface: #141416;
+      --surface-2: #1c1c20;
+      --border: #27272a;
+      --border-strong: #3f3f46;
+      --text: #fafafa;
+      --text-2: #a1a1aa;
+      --text-3: #71717a;
+      --accent: #7ba3f5;
+      --accent-bg: #16203a;
+      --focus: #7ba3f5;
+      --danger: #f87171;
+    }
+  }
+
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font: 15px/1.55 ui-sans-serif, system-ui, -apple-system, "Segoe UI", Inter, Roboto, sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+  a { color: var(--accent); }
+  :focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; border-radius: 3px; }
+
+  .wrap { max-width: 1080px; margin: 0 auto; padding: 0 24px; }
+
+  /* ---------- app shell ----------
+     The canvas is the page, not a widget on it: chrome sits around the edges
+     and the workspace fills everything left over. */
+  html, body { height: 100%; overflow: hidden; }
+  #app { display: flex; flex-direction: column; height: 100%; }
+  #body { display: flex; flex: 1; min-height: 0; }
+
+  #side {
+    width: var(--side-w, 340px); flex: none; min-width: 0;
+    border-right: 1px solid var(--border);
+    display: flex; flex-direction: column;
+    background: var(--bg);
+  }
+
+  /* Drag to resize. The library gets wider, and its columns multiply to fill
+     the room rather than leaving one lonely column in a wide rail. */
+  #grip {
+    width: 6px; flex: none; cursor: col-resize;
+    background: transparent; position: relative;
+  }
+  #grip::after {
+    content: ""; position: absolute; inset: 0 2px;
+    background: transparent; transition: background .12s;
+  }
+  #grip:hover::after, #grip[data-drag="true"]::after { background: var(--accent); }
+  #side-head {
+    padding: 10px 14px; border-bottom: 1px solid var(--border);
+    display: flex; gap: 8px; align-items: center;
+  }
+  #side-list {
+    overflow-y: auto; flex: 1; padding: 12px 14px 24px;
+    display: grid; align-content: start; gap: 10px;
+    grid-template-columns: repeat(auto-fill, minmax(248px, 1fr));
+  }
+  #side-list .group-label { grid-column: 1 / -1; }
+  #side-list .empty { grid-column: 1 / -1; }
+  #side[hidden] { display: none; }
+
+  .side-toggle { display: flex; border: 1px solid var(--border); border-radius: 6px; overflow: hidden; flex: 1; }
+  .side-toggle button {
+    flex: 1; font: inherit; font-size: 12.5px; padding: 6px 8px;
+    background: var(--surface); color: var(--text-2); border: 0; cursor: pointer;
+  }
+  .side-toggle button + button { border-left: 1px solid var(--border); }
+  .side-toggle button[aria-pressed="true"] { background: var(--bg); color: var(--text); font-weight: 500; }
+
+  #stage { flex: 1; min-width: 0; position: relative; }
+
+  .rail-btn {
+    font: inherit; font-size: 13px; padding: 6px 10px;
+    color: var(--text-2); background: var(--bg);
+    border: 1px solid var(--border); border-radius: 6px; cursor: pointer;
+  }
+  .rail-btn:hover { color: var(--text); border-color: var(--border-strong); }
+
+  @media (max-width: 860px) {
+    #side { position: absolute; z-index: 12; top: 0; bottom: 0; left: 0; box-shadow: 0 0 24px rgba(0,0,0,.18); }
+    #body { position: relative; }
+  }
+
+  /* ---------- header ---------- */
+  header {
+    border-bottom: 1px solid var(--border);
+    background: var(--bg);
+    position: sticky; top: 0; z-index: 20;
+  }
+  .head-top {
+    display: flex; align-items: center; gap: 12px;
+    padding: 12px 0;
+  }
+  h1 { font-size: 19px; font-weight: 600; letter-spacing: -0.01em; margin: 0; }
+  .count { color: var(--text-3); font-size: 13px; }
+  .head-note { margin-left: auto; color: var(--text-3); font-size: 12.5px; }
+
+  .controls { display: flex; gap: 10px; padding-bottom: 12px; }
+  input[type="search"] {
+    flex: 1; min-width: 0;
+    padding: 9px 12px;
+    font: inherit; font-size: 14px;
+    color: var(--text);
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+  }
+  input[type="search"]::placeholder { color: var(--text-3); }
+  input[type="search"]:focus { border-color: var(--border-strong); outline: none; box-shadow: 0 0 0 2px var(--accent-bg); }
+
+  .toggle { display: flex; border: 1px solid var(--border); border-radius: 6px; overflow: hidden; }
+  .toggle button {
+    font: inherit; font-size: 13.5px;
+    padding: 8px 14px;
+    background: var(--surface); color: var(--text-2);
+    border: 0; cursor: pointer;
+    transition: color .15s, background .15s;
+  }
+  .toggle button + button { border-left: 1px solid var(--border); }
+  .toggle button[aria-pressed="true"] { background: var(--bg); color: var(--text); font-weight: 500; }
+  .toggle button:hover { color: var(--text); }
+
+  .filters { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; padding-bottom: 12px; }
+  .controls select {
+    font: inherit; font-size: 13.5px;
+    padding: 8px 30px 8px 11px;
+    color: var(--text); background: var(--surface);
+    border: 1px solid var(--border); border-radius: 6px;
+    max-width: 100%; cursor: pointer;
+    appearance: none; -webkit-appearance: none;
+    background-image: linear-gradient(45deg, transparent 50%, var(--text-3) 50%),
+                      linear-gradient(135deg, var(--text-3) 50%, transparent 50%);
+    background-position: right 13px center, right 8px center;
+    background-size: 5px 5px, 5px 5px;
+    background-repeat: no-repeat;
+  }
+  .controls select:hover { border-color: var(--border-strong); }
+  .controls select:focus { border-color: var(--accent); outline: none; }
+
+  /* A checklist rather than a dropdown, because picking two disciplines at once
+     is the normal case and a select forces you to choose one or all. */
+  .multi { position: relative; }
+  .multi-btn {
+    font: inherit; font-size: 13.5px;
+    padding: 8px 30px 8px 11px;
+    color: var(--text); background: var(--surface);
+    border: 1px solid var(--border); border-radius: 6px;
+    cursor: pointer; text-align: left; white-space: nowrap;
+    background-image: linear-gradient(45deg, transparent 50%, var(--text-3) 50%),
+                      linear-gradient(135deg, var(--text-3) 50%, transparent 50%);
+    background-position: right 13px center, right 8px center;
+    background-size: 5px 5px, 5px 5px;
+    background-repeat: no-repeat;
+  }
+  .multi-btn:hover { border-color: var(--border-strong); }
+  .multi-btn[aria-expanded="true"] { border-color: var(--accent); }
+  .multi-btn.on { color: var(--accent); border-color: var(--accent); }
+
+  .multi-menu {
+    position: absolute; top: calc(100% + 5px); left: 0; z-index: 40;
+    min-width: 230px; max-height: 340px; overflow-y: auto;
+    padding: 5px;
+    background: var(--surface); border: 1px solid var(--border-strong);
+    border-radius: 8px; box-shadow: 0 10px 28px rgba(0,0,0,.16);
+  }
+  .multi-menu[hidden] { display: none; }
+  .multi-menu label {
+    display: flex; align-items: center; gap: 9px;
+    padding: 7px 9px; border-radius: 5px;
+    font-size: 13.5px; color: var(--text); cursor: pointer;
+  }
+  .multi-menu label:hover { background: var(--accent-bg); }
+  .multi-menu input { margin: 0; accent-color: var(--accent); cursor: pointer; }
+  .multi-swatch { width: 9px; height: 9px; border-radius: 2px; flex: none; }
+  .multi-count { margin-left: auto; font-size: 12px; color: var(--text-3); }
+  .multi-foot {
+    display: flex; justify-content: space-between;
+    border-top: 1px solid var(--border); margin-top: 4px; padding: 6px 4px 2px;
+  }
+  .multi-foot button {
+    font: inherit; font-size: 12.5px; color: var(--text-2);
+    background: none; border: 0; cursor: pointer; padding: 3px 5px; border-radius: 4px;
+  }
+  .multi-foot button:hover { color: var(--accent); background: var(--accent-bg); }
+
+  .clear {
+    font: inherit; font-size: 13px; color: var(--text-2);
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 6px; cursor: pointer; padding: 7px 12px;
+    transition: color .12s, border-color .12s;
+  }
+  .clear:hover { color: var(--text); border-color: var(--border-strong); }
+
+  /* Deleting is rare and irreversible-looking, so it reads as an aside at the
+     bottom of the panel rather than an action competing with Copy. */
+  .owner { margin-top: 26px; padding-top: 18px; border-top: 1px solid var(--border); }
+  .owner p { color: var(--text-2); font-size: 14px; margin: 0 0 12px; }
+  .danger {
+    font: inherit; font-size: 13.5px;
+    padding: 8px 14px; border-radius: 6px; cursor: pointer;
+    color: var(--text-2); background: var(--surface);
+    border: 1px solid var(--border);
+    transition: color .12s, border-color .12s, background .12s;
+  }
+  .danger:hover { color: var(--danger); border-color: var(--danger); }
+  .danger.armed { color: #fff; background: var(--danger); border-color: var(--danger); }
+  .danger:disabled { opacity: .6; cursor: default; }
+  .clear[aria-pressed="true"] { color: var(--accent); border-color: var(--accent); }
+  .clear[hidden] { display: none; }
+
+  /* ---------- list ---------- */
+  .legend {
+    position: absolute; left: 14px; top: 12px; z-index: 5;
+    background: var(--bg); border: 1px solid var(--border); border-radius: 7px;
+    padding: 8px 11px; max-width: calc(100% - 28px);
+  }
+  .group-label {
+    font-size: 12px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase;
+    color: var(--text-3);
+    padding: 28px 0 4px;
+  }
+  .group-label .role { font-weight: 400; text-transform: none; letter-spacing: 0; margin-left: 8px; }
+
+  .row {
+    display: block; width: 100%; text-align: left;
+    font: inherit; color: inherit;
+    background: var(--bg); border: 1px solid var(--border);
+    border-radius: 7px; padding: 11px 12px 10px;
+    cursor: pointer;
+    transition: background .12s, border-color .12s;
+  }
+  .row:hover { background: var(--surface); border-color: var(--border-strong); }
+  .row-tag {
+    display: inline-block; font-size: 10px; font-weight: 600;
+    letter-spacing: .02em; color: #fff; background: var(--s0);
+    padding: 2px 6px; border-radius: 3px; margin-bottom: 6px;
+  }
+  .row-head { display: flex; align-items: baseline; gap: 10px; }
+  .row-name { font-size: 15px; font-weight: 550; letter-spacing: -0.005em; }
+  .row-meta { margin-left: auto; font-size: 12.5px; color: var(--text-3); white-space: nowrap; }
+  .row-desc { color: var(--text-2); font-size: 13.5px; margin-top: 3px; max-width: 68ch; }
+  .row-sub { font-size: 12.5px; color: var(--text-3); margin-top: 6px; }
+  .kind { color: var(--text-3); font-size: 12px; }
+  .kind-forked { color: var(--accent); }
+
+  /* Recommended entries are third-party. Marked so nobody mistakes them for
+     something written here, but not visually demoted — the vouch is the point. */
+  .ext {
+    font-size: 11px; font-weight: 500; letter-spacing: .03em; text-transform: uppercase;
+    color: var(--text-3); border: 1px solid var(--border); border-radius: 3px;
+    padding: 1px 5px; margin-left: 8px; vertical-align: 1px;
+  }
+  .why { border-left: 2px solid var(--border-strong); padding-left: 12px; margin: 0 0 14px; }
+  .why p { margin: 0 0 4px; font-size: 14px; color: var(--text-2); }
+  .why cite { font-style: normal; font-size: 12.5px; color: var(--text-3); }
+
+  .empty { padding: 48px 0; color: var(--text-3); font-size: 14px; }
+
+  .empty-hub { padding: 72px 0 40px; max-width: 52ch; }
+  .empty-hub h2 { font-size: 17px; font-weight: 600; margin: 0 0 10px; letter-spacing: -0.01em; }
+  .empty-hub p { color: var(--text-2); font-size: 14px; margin: 0 0 14px; }
+  .empty-hub ol { color: var(--text-2); font-size: 14px; padding-left: 20px; margin: 0; }
+  .empty-hub li { margin-bottom: 7px; }
+  .empty-hub code {
+    font: 12.5px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    background: var(--surface-2); padding: 1px 5px; border-radius: 4px;
+  }
+
+  /* ---------- map view ----------
+     Eight categorical hues in a fixed order, validated for colour-blind
+     separation against these exact surfaces in both modes. The dark column is
+     the same hues re-stepped for the dark surface, not an automatic flip.
+     Three of the light hues sit under 3:1 contrast, which is permitted only
+     because every chip carries its label. Do not remove the labels. */
+  :root {
+    --s1: #2a78d6; --s2: #eb6834; --s3: #1baf7a; --s4: #eda100;
+    --s5: #e87ba4; --s6: #008300; --s7: #4a3aa7; --s8: #e34948;
+    --s0: #8b8b93;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --s1: #3987e5; --s2: #d95926; --s3: #199e70; --s4: #c98500;
+      --s5: #d55181; --s6: #008300; --s7: #9085e9; --s8: #e66767;
+      --s0: #71717a;
+    }
+  }
+
+  .legend { display: flex; flex-wrap: wrap; gap: 8px 16px; line-height: 1.5; }
+  .legend span {
+    display: inline-flex; align-items: center; gap: 7px;
+    font-size: 12.5px; color: var(--text-2); white-space: nowrap;
+  }
+  .legend i { width: 9px; height: 9px; border-radius: 2px; display: inline-block; flex: none; }
+
+  /* ---------- open canvas ----------
+     Pan by dragging the background, zoom with the wheel, drag a card to move
+     it. Hand-rolled rather than pulled from a library so the page stays one
+     self-contained file with no network. */
+  .canvas {
+    position: absolute; inset: 0; overflow: hidden;
+    background:
+      radial-gradient(circle, var(--border) 1px, transparent 1px) 0 0 / 22px 22px,
+      var(--bg);
+    cursor: grab; touch-action: none; user-select: none;
+  }
+  .canvas[data-panning="true"] { cursor: grabbing; }
+  .world { position: absolute; top: 0; left: 0; transform-origin: 0 0; will-change: transform; }
+
+  /* A person is a frame drawn around wherever their skill boxes ended up.
+     pointer-events:none so dragging across a frame pans the canvas instead of
+     catching on it. */
+  /* The frame is grabbable so a person can be moved as one piece. The skill
+     boxes are painted after it and therefore sit on top, so clicking a box
+     still moves that box alone. */
+  .pf {
+    position: absolute; cursor: grab;
+    border: 1.5px dashed var(--border-strong); border-radius: 12px;
+    background: var(--surface); transition: border-color .12s;
+  }
+  .pf:hover { border-color: var(--accent); }
+  .pf[data-drag="true"] { cursor: grabbing; border-color: var(--accent); border-style: solid; }
+  .pf-label {
+    position: absolute; top: 14px; left: 18px; right: 18px;
+    display: flex; flex-direction: column; gap: 1px;
+    pointer-events: none;
+  }
+  .pf-name { font-size: 17px; font-weight: 700; color: var(--text); letter-spacing: -0.01em; }
+  .pf-role { font-size: 14px; font-weight: 600; color: var(--text-2); }
+  .pf-count { font-size: 12px; font-weight: 600; color: var(--text-3); margin-top: 2px; }
+
+  /* Each skill is its own box and moves on its own. */
+  .sk {
+    position: absolute; width: 204px;
+    border: 1px solid var(--border); border-radius: 7px;
+    background: var(--bg); overflow: hidden;
+    cursor: grab; box-shadow: 0 1px 2px rgba(0,0,0,.05);
+  }
+  .sk:active { cursor: grabbing; }
+  .sk[data-drag="true"] { border-color: var(--accent); box-shadow: 0 5px 16px rgba(0,0,0,.16); z-index: 3; }
+
+  .sk-tab {
+    display: block; font-size: 10.5px; font-weight: 600;
+    letter-spacing: .03em; color: #fff; background: var(--s0);
+    padding: 3px 9px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  .sk-open {
+    display: block; width: 100%; text-align: left;
+    font: inherit; font-size: 13px; font-weight: 500; color: var(--text);
+    background: none; border: 0; padding: 8px 10px 9px; cursor: pointer;
+  }
+  .sk-open:hover { color: var(--accent); }
+
+  .canvas-ui {
+    position: absolute; right: 12px; bottom: 12px; z-index: 5;
+    display: flex; gap: 6px;
+  }
+  .canvas-ui button {
+    font: inherit; font-size: 12.5px; padding: 5px 10px;
+    color: var(--text-2); background: var(--bg);
+    border: 1px solid var(--border); border-radius: 6px; cursor: pointer;
+  }
+  .canvas-ui button:hover { color: var(--text); border-color: var(--border-strong); }
+  .canvas-note { font-size: 12px; color: var(--text-3); align-self: center; padding-left: 4px; }
+  .canvas-hint {
+    position: absolute; left: 12px; bottom: 14px; z-index: 5;
+    font-size: 12px; color: var(--text-3); pointer-events: none;
+  }
+
+
+
+  .disc-1 { background: var(--s1); } .disc-2 { background: var(--s2); }
+  .disc-3 { background: var(--s3); } .disc-4 { background: var(--s4); }
+  .disc-5 { background: var(--s5); } .disc-6 { background: var(--s6); }
+  .disc-7 { background: var(--s7); } .disc-8 { background: var(--s8); }
+  /* Slots 3, 4 and 5 are light enough that white text on them fails; those
+     three take dark ink instead. */
+  .disc-3, .disc-4, .disc-5 { color: #16160f; }
+
+
+  /* ---------- add-your-skills panel ---------- */
+  .add-panel {
+    position: fixed; top: 0; right: 0; bottom: 0;
+    width: min(620px, 100%);
+    background: var(--bg); border-left: 1px solid var(--border);
+    z-index: 45; transform: translateX(100%); transition: transform .2s ease;
+    display: flex; flex-direction: column;
+  }
+  .add-panel[data-open="true"] { transform: none; }
+  .add-body { padding: 22px 26px 40px; overflow-y: auto; flex: 1; }
+  .add-body h3 {
+    font-size: 12px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase;
+    color: var(--text-3); margin: 28px 0 10px;
+  }
+  .add-body h3:first-child { margin-top: 0; }
+  .add-body p { margin: 0 0 14px; color: var(--text-2); font-size: 14px; max-width: 62ch; }
+  .add-body ol { color: var(--text-2); font-size: 14px; padding-left: 20px; margin: 0 0 14px; }
+  .add-body li { margin-bottom: 6px; }
+
+  .field { margin-bottom: 14px; }
+  .field label { display: block; font-size: 13px; color: var(--text-2); margin-bottom: 5px; }
+  .field input[type="text"], .field select {
+    width: 100%; padding: 8px 11px; font: inherit; font-size: 14px;
+    color: var(--text); background: var(--surface);
+    border: 1px solid var(--border); border-radius: 6px;
+  }
+  .found-item select {
+    font: inherit; font-size: 12.5px; padding: 4px 8px;
+    color: var(--text-2); background: var(--surface);
+    border: 1px solid var(--border); border-radius: 5px;
+    margin-left: auto;
+  }
+  .who {
+    font-size: 14px; color: var(--text);
+    padding: 8px 11px; background: var(--surface);
+    border: 1px solid var(--border); border-radius: 6px;
+  }
+  .who-sub { display: block; font-size: 12px; color: var(--text-3); margin-top: 1px; }
+
+  .field-row { display: flex; gap: 12px; }
+  .field-row .field { flex: 1; }
+
+  .picker {
+    border: 1px dashed var(--border-strong); border-radius: 8px;
+    padding: 20px; text-align: center; margin-bottom: 8px;
+  }
+  .picker p { margin: 10px auto 0; font-size: 12.5px; color: var(--text-3); max-width: 44ch; }
+  .picker input[type="file"] { display: none; }
+  .picker .btn + .btn { margin-left: 8px; }
+  .picker[data-over="true"] { border-color: var(--accent); background: var(--accent-bg); }
+
+  .bulk { display: flex; align-items: center; gap: 14px; padding: 12px 2px 0; flex-wrap: wrap; }
+  .bulk-sep { width: 1px; height: 13px; background: var(--border); }
+  .linkish {
+    font: inherit; font-size: 12.5px; color: var(--accent);
+    background: none; border: 0; padding: 0; cursor: pointer;
+  }
+  .linkish:hover { text-decoration: underline; }
+  .found-more {
+    font: inherit; font-size: 12px; color: var(--text-3);
+    background: none; border: 0; padding: 4px 0 0; cursor: pointer;
+  }
+  .found-more:hover { color: var(--text-2); }
+  .found-item[data-open="false"] textarea,
+  .found-item[data-open="false"] .hint { display: none; }
+
+  .found { border-top: 1px solid var(--border); margin-top: 18px; }
+  .found-item { border-bottom: 1px solid var(--border); padding: 14px 0; }
+  .found-head { display: flex; align-items: baseline; gap: 9px; }
+  .found-head input[type="checkbox"] { margin: 0; accent-color: var(--accent); }
+  .found-name { font-size: 14px; font-weight: 550; }
+  .found-why { font-size: 12.5px; color: var(--text-3); margin-left: auto; }
+  .found-item textarea {
+    width: 100%; margin-top: 9px; padding: 9px 11px;
+    font: inherit; font-size: 13.5px; line-height: 1.5;
+    color: var(--text); background: var(--surface);
+    border: 1px solid var(--border); border-radius: 6px; resize: vertical;
+  }
+  .found-item[data-on="false"] textarea,
+  .found-item[data-on="false"] .hint { display: none; }
+  .hint { font-size: 12px; color: var(--text-3); margin-top: 5px; }
+  .warn { color: #b45309; }
+  @media (prefers-color-scheme: dark) { .warn { color: #fbbf24; } }
+
+  .add-actions {
+    display: flex; gap: 10px; align-items: center;
+    border-top: 1px solid var(--border); padding: 16px 26px;
+    background: var(--bg);
+  }
+  .add-status { font-size: 12.5px; color: var(--text-3); }
+
+  /* Last-resort copy surface for contexts where the clipboard API is blocked. */
+  .manual-copy {
+    position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%);
+    z-index: 60; width: min(560px, calc(100% - 32px));
+    background: var(--bg); border: 1px solid var(--border-strong);
+    border-radius: 8px; padding: 16px;
+    box-shadow: 0 8px 24px rgba(0,0,0,.18);
+  }
+  .manual-copy p { margin: 0 0 10px; font-size: 13.5px; color: var(--text-2); }
+  .manual-copy kbd {
+    font: 12px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    background: var(--surface-2); border: 1px solid var(--border);
+    border-radius: 3px; padding: 1px 4px;
+  }
+  .manual-copy textarea {
+    width: 100%; font: 12.5px/1.5 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    color: var(--text); background: var(--surface-2);
+    border: 1px solid var(--border); border-radius: 6px; padding: 10px;
+    resize: vertical; margin-bottom: 10px;
+  }
+
+  /* ---------- detail panel ---------- */
+  .scrim {
+    position: fixed; inset: 0; background: rgba(0,0,0,.32);
+    opacity: 0; pointer-events: none; transition: opacity .18s; z-index: 30;
+  }
+  .scrim[data-open="true"] { opacity: 1; pointer-events: auto; }
+  .panel {
+    position: fixed; top: 0; right: 0; bottom: 0;
+    width: min(560px, 100%);
+    background: var(--bg);
+    border-left: 1px solid var(--border);
+    z-index: 40;
+    transform: translateX(100%);
+    transition: transform .2s ease;
+    display: flex; flex-direction: column;
+  }
+  .panel[data-open="true"] { transform: none; }
+  .panel-head {
+    padding: 22px 26px 16px;
+    border-bottom: 1px solid var(--border);
+    border-top: 3px solid var(--accent-disc, var(--border));
+  }
+  /* The discipline colour edges the panel rather than washing it. Three of the
+     eight hues sit under 3:1 on light, so tinting the surface would cost more
+     readability than the cue is worth. The tab and label still carry it. */
+  .panel { border-left: 1px solid var(--accent-disc, var(--border)); }
+  .panel h2 .ext { border-color: var(--accent-disc, var(--border)); }
+  .panel-close {
+    float: right; font: inherit; font-size: 13px;
+    background: transparent; border: 0; color: var(--text-3);
+    cursor: pointer; padding: 2px 4px;
+  }
+  .panel-close:hover { color: var(--text); }
+  .panel h2 { font-size: 17px; font-weight: 600; margin: 0 0 4px; letter-spacing: -0.01em; }
+  .panel-by { font-size: 13px; color: var(--text-3); }
+  .panel-body { padding: 22px 26px 40px; overflow-y: auto; flex: 1; }
+  .panel-body p { margin: 0 0 18px; color: var(--text-2); font-size: 14px; max-width: 60ch; }
+  .panel-body h3 {
+    font-size: 12px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase;
+    color: var(--text-3); margin: 26px 0 10px;
+  }
+  ol.steps { margin: 0; padding-left: 18px; color: var(--text-2); font-size: 14px; }
+  ol.steps li { margin-bottom: 7px; }
+
+  .about p { margin: 0 0 14px; color: var(--text-2); font-size: 14px; max-width: 60ch; }
+  .about ul { margin: 0 0 14px; padding-left: 18px; color: var(--text-2); font-size: 14px; }
+  .about li { margin-bottom: 6px; }
+  .about > :last-child { margin-bottom: 0; }
+
+  .install { display: flex; gap: 8px; align-items: center; margin-top: 8px; }
+  .btn {
+    font: inherit; font-size: 13.5px; font-weight: 500;
+    padding: 8px 14px; border-radius: 6px; cursor: pointer;
+    background: var(--accent); color: #fff; border: 1px solid var(--accent);
+    transition: opacity .15s;
+  }
+  @media (prefers-color-scheme: dark) { .btn { color: #0c0c0e; } }
+  .btn:hover { opacity: .88; }
+  .btn-quiet {
+    background: transparent; color: var(--text-2); border-color: var(--border);
+  }
+  .btn-quiet:hover { color: var(--text); border-color: var(--border-strong); opacity: 1; }
+  .install-note { font-size: 12.5px; color: var(--text-3); margin-top: 10px; }
+
+  /* Flowcharts drawn from the skill's own diagram.mmd. Themed with the page,
+     so unlike a pre-rendered image these stay readable in dark mode. */
+  svg.mmd { width: 100%; height: auto; display: block; }
+  svg.mmd .mn { fill: var(--surface-2); stroke: var(--border-strong); stroke-width: 1; }
+  svg.mmd .mt { fill: var(--text); font: 500 12px ui-sans-serif, system-ui, sans-serif; text-anchor: middle; }
+  svg.mmd .me { fill: none; stroke: var(--border-strong); stroke-width: 1.5; }
+  svg.mmd .mam { fill: var(--border-strong); stroke: none; }
+  svg.mmd .mel {
+    fill: var(--text-3); font: 11px ui-sans-serif, system-ui, sans-serif;
+    text-anchor: middle; paint-order: stroke; stroke: var(--bg); stroke-width: 3px;
+  }
+
+  .mmd-src {
+    margin-top: 10px; font-size: 12.5px; color: var(--text-3);
+    background: none; border: 0; padding: 0; cursor: pointer;
+  }
+  .mmd-src:hover { color: var(--text-2); }
+
+  /* Hand-drawn diagram.svg files are pre-rendered and assume a light ground,
+     so those keep a light backing in both themes. */
+  .diagram {
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 14px;
+    overflow-x: auto;
+    background: #fff;
+  }
+  .diagram svg { max-width: 100%; height: auto; display: block; margin: 0 auto; }
+
+  pre.source {
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 14px;
+    overflow-x: auto;
+    font: 12.5px/1.6 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    color: var(--text-2);
+    margin: 0;
+  }
+
+  @media (max-width: 620px) {
+    .controls { flex-wrap: wrap; }
+    .toggle { width: 100%; }
+    .toggle button { flex: 1; }
+    .head-note { display: none; }
+    .row-meta { display: none; }
+  }
+</style>
+</head>
+<body>
+
+<div id="app">
+  <header>
+    <div class="wrap">
+      <div class="head-top">
+        <h1>Skill Atlas</h1>
+        <span class="count" id="count"></span>
+        <span class="head-note" id="updated"></span>
+      </div>
+      <div class="controls">
+        <button class="rail-btn" id="side-hide" aria-label="Show or hide the library" title="Show or hide the library">&#9776;</button>
+        <input type="search" id="q" placeholder="Search skills. Try &ldquo;pricing&rdquo;, &ldquo;QBR&rdquo;, &ldquo;forecast&rdquo;" autocomplete="off">
+        <select id="f-dept" aria-label="Filter by team"></select>
+        <div class="multi" id="disc-wrap">
+          <button class="multi-btn" id="f-disc-btn" aria-expanded="false"
+                  aria-haspopup="true">All disciplines</button>
+          <div class="multi-menu" id="f-disc-menu" hidden></div>
+        </div>
+        <button class="clear" id="f-mine" hidden aria-pressed="false">Only mine</button>
+        <button class="clear" id="f-clear" hidden>Clear</button>
+        <button class="btn" id="add-open">Add your skills</button>
+      </div>
+    </div>
+  </header>
+
+  <div id="body">
+    <aside id="side">
+      <div id="side-head">
+        <div class="side-toggle" role="group" aria-label="Library view">
+          <button id="view-all" aria-pressed="true">All skills</button>
+          <button id="view-people" aria-pressed="false">By person</button>
+        </div>
+      </div>
+      <div id="side-list"></div>
+    </aside>
+
+    <div id="grip" role="separator" aria-orientation="vertical" aria-label="Resize the library"></div>
+
+    <div id="stage">
+      <div class="canvas" id="canvas">
+        <div class="world" id="world"></div>
+        <div class="legend" id="legend" hidden></div>
+        <div class="canvas-hint">Scroll to pan &middot; ctrl or &#8984; + scroll to zoom &middot; drag a skill to move it, or a frame to move a whole person</div>
+        <div class="canvas-ui">
+          <button id="cv-out" aria-label="Zoom out">&minus;</button>
+          <button id="cv-in" aria-label="Zoom in">+</button>
+          <button id="cv-fit">Fit</button>
+          <button id="cv-reset">Reset</button>
+          <span class="canvas-note" id="cv-note"></span>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div id="filters" hidden></div>
+
+<aside class="add-panel" id="add-panel" aria-hidden="true" aria-label="Add your skills">
+  <div class="panel-head">
+    <button class="panel-close" id="add-close">Close</button>
+    <h2>Add your skills</h2>
+    <div class="panel-by">Publish what you've written so other people can find it</div>
+  </div>
+
+  <div class="add-body">
+    <h3>The easy way</h3>
+    <p>Paste one instruction into Claude and it does everything. It works out which
+       skills are actually yours, checks each one for anything confidential
+       <em>before</em> it leaves your machine, writes the plain-language summaries,
+       and hands you a folder to drop in.</p>
+    <div class="install">
+      <button class="btn" id="copy-prompt">Copy the instruction</button>
+    </div>
+
+    <h3>Or build it here</h3>
+    <p>No Claude needed. Point at your skills folder, write a sentence about each
+       one, and get a folder to drag into the hub.</p>
+    <p class="hint warn">This page can only spot obvious things like API keys. It
+       can't tell whether a skill mentions a customer or a deal. That judgment is
+       yours. The Claude route above does a fuller check.</p>
+
+    <div class="field-row">
+      <div class="field" id="name-field">
+        <label for="add-name">Your name</label>
+        <input type="text" id="add-name" placeholder="Joe Bloggs" autocomplete="off">
+      </div>
+      <div class="field">
+        <label for="add-team">Your team</label>
+        <select id="add-team"></select>
+      </div>
+    </div>
+
+    <div class="picker" id="drop">
+      <button class="btn btn-quiet" id="pick-btn">Choose a folder</button>
+      <button class="btn btn-quiet" id="pick-files-btn">Choose files</button>
+      <input type="file" id="pick" webkitdirectory directory multiple>
+      <input type="file" id="pick-files" multiple>
+      <p>Or drag anything here: your whole <code>.claude/skills</code> folder, one
+         skill folder, or a handful of files. Nothing leaves your browser until
+         you press publish.</p>
+    </div>
+
+    <div class="bulk" id="bulk" hidden>
+      <button class="linkish" data-bulk="all">Select all</button>
+      <button class="linkish" data-bulk="none">Select none</button>
+      <span class="bulk-sep"></span>
+      <button class="linkish" data-bulk="mine">Mark all as mine</button>
+      <button class="linkish" data-bulk="ext">Mark all as found elsewhere</button>
+    </div>
+
+    <div class="found" id="found" hidden></div>
+  </div>
+
+  <div class="add-actions">
+    <button class="btn" id="add-build" disabled>Build my folder</button>
+    <span class="add-status" id="add-status"></span>
+  </div>
+</aside>
+
+<div class="manual-copy" id="manual-copy" hidden>
+  <p>Your browser blocked the clipboard here. Press <kbd>Ctrl</kbd>+<kbd>C</kbd>. The text is already selected.</p>
+  <textarea readonly rows="6"></textarea>
+  <button class="btn btn-quiet" id="manual-copy-close">Done</button>
+</div>
+
+<div class="scrim" id="scrim"></div>
+<aside class="panel" id="panel" aria-hidden="true" aria-label="Skill detail">
+  <div class="panel-head">
+    <button class="panel-close" id="close">Close</button>
+    <h2 id="p-name"></h2>
+    <div class="panel-by" id="p-by"></div>
+  </div>
+  <div class="panel-body" id="p-body"></div>
+</aside>
+
+<script>
+// ---------------------------------------------------------------------------
+// DATA — generated by tools/generate-atlas from each person's profile.json.
+// Everything between the markers is overwritten on every publish. Do not edit
+// it by hand. Everything outside the markers is presentation and is preserved.
+// ---------------------------------------------------------------------------
+/* @data:start */
+// Sample data, so the page renders something before anyone has published.
+// Overwritten in full by the generator and by Code.gs on every real load, so
+// editing it by hand only changes what an unconfigured copy looks like.
+const UPDATED = "5 Aug 2026";
+
+const PEOPLE = [
+  { id: "alice",  name: "Alice Nguyen",  role: "Customer Success" },
+  { id: "bob",    name: "Bob Ferreira",  role: "Sales" },
+  { id: "chandra", name: "Chandra Iyer", role: "Finance" },
+  { id: "dana",   name: "Dana Okafor",   role: "Operations" }
+];
+
+const SKILLS = [
+  { id:"meeting-notes-cleanup", name:"Meeting notes cleanup", author:"alice", tags:["writing","meetings"], installs:12, updated:"2 Aug",
+    desc:"Turns raw meeting notes into a short summary, a decision list, and owned action items with dates.",
+    steps:["Separate decisions from discussion","Pull out every action and give it an owner and a date","Write a three-line summary someone who missed it can read"],
+    src:"---\nname: meeting-notes-cleanup\ndescription: Turn raw meeting notes into a summary, decisions,\n  and owned actions. Use after any meeting where notes were\n  taken quickly and nobody has tidied them.\n---\n\n# Meeting notes cleanup\n\n## Separate the three things\n\nDecisions, actions, and discussion are different. Most raw notes\nmix all three, which is why nobody rereads them.\n\n## Every action needs an owner and a date\n\nAn action without both is a wish. If the notes do not say who or\nwhen, say so explicitly rather than guessing.\n\n## Output\n\nA three-line summary, a decision list, and an action table."
+  },
+  { id:"weekly-update-draft", name:"Weekly update draft", author:"bob", tags:["writing","reporting"], installs:9, updated:"29 Jul",
+    desc:"Drafts a weekly status update from your notes and calendar, in plain language, without inventing progress.",
+    steps:["Collect what actually happened from notes and calendar","Group into shipped, in progress, and blocked","Say what is blocked and who can unblock it"],
+    src:"---\nname: weekly-update-draft\ndescription: Draft a weekly status update from notes and\n  calendar. Use on Friday, or before any recurring status\n  meeting.\n---\n\n# Weekly update draft\n\n## Only what happened\n\nDraft from real notes and real calendar entries. Do not smooth a\nquiet week into a busy-sounding one; a status update that\noverstates gets trusted once.\n\n## Three buckets\n\nShipped, in progress, blocked. Blocked items name who can unblock\nthem, or they will sit there another week.\n\n## Output\n\nUnder 200 words. If it needs more, the week needs a conversation."
+  },
+  { id:"spreadsheet-sanity-check", name:"Spreadsheet sanity check", author:"chandra", tags:["data","finance"], installs:15, updated:"24 Jul",
+    desc:"Checks a spreadsheet for the errors that survive review: broken ranges, silent text-as-number, and totals that do not foot.",
+    steps:["Check every total actually sums its range","Find numbers stored as text and inconsistent units","Flag hardcoded values sitting inside formula columns"],
+    src:"---\nname: spreadsheet-sanity-check\ndescription: Check a spreadsheet for errors that survive a\n  normal review. Use before sending any sheet someone will make\n  a decision from.\n---\n\n# Spreadsheet sanity check\n\n## The errors that survive review\n\nPeople check the numbers they expect to be wrong. These are the\nones that get through:\n\n- A total whose range stops one row short of the data\n- Numbers stored as text, so they silently drop out of sums\n- A hardcoded value pasted into the middle of a formula column\n- Two columns in different units with no label saying so\n\n## Output\n\nA list of what is wrong and where, with the cell references. Do\nnot fix anything without being asked."
+  },
+  { id:"onboarding-checklist", name:"Onboarding checklist", author:"dana", tags:["operations","onboarding"], installs:7, updated:"18 Jul",
+    desc:"Builds a first-two-weeks checklist for a new starter from the role and team, split into access, context, and first task.",
+    steps:["List the access they need and who grants each","Pick the reading that actually matters, not everything","Choose a first task that ships in week one"],
+    src:"---\nname: onboarding-checklist\ndescription: Build a first-two-weeks checklist for a new\n  starter. Use when someone is joining and nobody has written\n  their onboarding down.\n---\n\n# Onboarding checklist\n\n## Access, context, first task\n\nThree sections. Access is what they cannot start without, and\neach line names who grants it. Context is the short list worth\nreading, not the whole wiki. First task is something that ships\nin week one, because nothing else builds confidence as fast.\n\n## Output\n\nA checklist they own, not a document they are sent."
+  }
+];
+
+// Installed and forked entries — the references model. No file duplication.
+const REFS = {
+  alice:   { installed:["bob/weekly-update-draft"], forked:[] },
+  bob:     { installed:["alice/meeting-notes-cleanup","chandra/spreadsheet-sanity-check"], forked:[] },
+  chandra: { installed:["alice/meeting-notes-cleanup"], forked:[{ id:"variance-notes", from:"bob/weekly-update-draft" }] },
+  dana:    { installed:["alice/meeting-notes-cleanup","chandra/spreadsheet-sanity-check"], forked:[] }
+};
+/* @data:end */
+
+// ---------------------------------------------------------------------------
+// VIEW
+// ---------------------------------------------------------------------------
+const personById = Object.fromEntries(PEOPLE.map(p => [p.id, p]));
+// Keyed by author/id, never id alone — two people independently writing a
+// "qbr-builder" is normal, and folder names are only unique within a person.
+const key        = s => `${s.author}/${s.id}`;
+const skillByKey = Object.fromEntries(SKILLS.map(s => [key(s), s]));
+
+let view = "all";
+let query = "";
+let fDept = "";
+const fDisc = new Set();      // empty means every discipline, not none
+let fMine = false;
+
+// Filled in from the server when the deployment runs as the visitor. Under
+// "Execute as: Me" it stays unknown and the page asks people to type a name.
+let ME = { known: false };
+
+const DISC_LABEL = Object.fromEntries((typeof DISCIPLINES !== "undefined" ? DISCIPLINES : [])
+  .map(d => [d.id, d.label]));
+
+// Fixed by hub.json slots, which is what keeps the colours legible: they were
+// validated for colour-blind separation on that adjacency, not on arbitrary
+// pairs. Every chip is labelled, so colour never carries meaning on its own.
+const DISC_ORDER = (typeof DISCIPLINES !== "undefined" ? DISCIPLINES : []).map(d => d.id);
+const DISC_SLOT = Object.fromEntries((typeof DISCIPLINES !== "undefined" ? DISCIPLINES : [])
+  .map(d => [d.id, d.slot || 0]));
+
+// Expand a search term into the disciplines whose vocabulary it belongs to, so
+// searching "html" finds a skill that only ever says "stylesheet", and "css"
+// finds the design ones without anyone having tagged them.
+function disciplinesFor(term) {
+  const signals = typeof DISCIPLINE_SIGNALS !== "undefined" ? DISCIPLINE_SIGNALS : {};
+  const out = [];
+  for (const d in signals) {
+    if (signals[d].some(w => w === term || (term.length > 2 && w.startsWith(term)))) out.push(d);
+  }
+  return out;
+}
+
+const stripHtml = h => String(h || "").replace(/<[^>]+>/g, " ");
+
+const $ = id => document.getElementById(id);
+const esc = s => s.replace(/[&<>"]/g, c => ({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;" }[c]));
+
+$("updated").textContent = "Updated " + UPDATED;
+
+// Filter dropdowns. Only offer teams and disciplines that actually have skills.
+// A list full of empty options makes the hub look emptier than it is.
+function buildFilters() {
+  const depts = [...new Set(SKILLS.map(s => s.dept).filter(Boolean))].sort();
+  const discs = [...new Set(SKILLS.map(s => s.discipline).filter(Boolean))].sort();
+
+  $("f-dept").innerHTML = `<option value="">All teams</option>` +
+    depts.map(d => `<option value="${esc(d)}">${esc(d)}</option>`).join("");
+
+  // Keep the taxonomy's order rather than alphabetical, so the checklist reads
+  // in the same sequence as the legend and the canvas tabs.
+  const ordered = DISC_ORDER.filter(d => discs.includes(d))
+    .concat(discs.filter(d => !DISC_ORDER.includes(d)));
+
+  const counts = {};
+  SKILLS.forEach(s => { counts[s.discipline] = (counts[s.discipline] || 0) + 1; });
+
+  $("f-disc-menu").innerHTML = ordered.map(d => `
+    <label>
+      <input type="checkbox" value="${esc(d)}"${fDisc.has(d) ? " checked" : ""}>
+      <i class="multi-swatch" style="background:var(--s${DISC_SLOT[d]})"></i>
+      ${esc(DISC_LABEL[d] || d)}
+      <span class="multi-count">${counts[d] || 0}</span>
+    </label>`).join("") + `
+    <div class="multi-foot">
+      <button type="button" data-disc-all>Select all</button>
+      <button type="button" data-disc-none>Clear</button>
+    </div>`;
+
+  syncDiscButton();
+  $("disc-wrap").hidden = ordered.length < 2;
+  $("filters").hidden = depts.length < 2 && discs.length < 2;
+}
+
+// The button has to say what is selected without growing to fit ten labels.
+// One name reads better than "1 discipline"; past that a count is clearer than
+// a truncated list.
+function syncDiscButton() {
+  const btn = $("f-disc-btn");
+  const picked = [...fDisc];
+  btn.textContent = picked.length === 0 ? "All disciplines"
+    : picked.length === 1 ? (DISC_LABEL[picked[0]] || picked[0])
+    : picked.length + " disciplines";
+  btn.classList.toggle("on", picked.length > 0);
+}
+buildFilters();
+
+// Everything sitting in my section: what I wrote, took, or forked.
+function myKeys() {
+  if (!ME.known) return null;
+  const r = (typeof REFS !== "undefined" && REFS[ME.person]) || { installed: [], forked: [] };
+  const set = new Set(r.installed || []);
+  (r.forked || []).forEach(f => set.add(ME.person + "/" + f.id));
+  SKILLS.forEach(s => { if (s.author === ME.person) set.add(key(s)); });
+  return set;
+}
+
+function matches(s) {
+  if (fMine) {
+    const mine = myKeys();
+    if (mine && !mine.has(key(s))) return false;
+  }
+  if (fDept && s.dept !== fDept) return false;
+  if (fDisc.size && !fDisc.has(s.discipline)) return false;
+  if (!query) return true;
+
+  const who = personById[s.author];
+  // Search the whole skill, not just its name. Someone looking for "reconcile"
+  // should find the skill that only says it in the third paragraph.
+  const hay = [
+    s.name, s.desc, (s.tags || []).join(" "), (s.auto || []).join(" "),
+    s.discipline, DISC_LABEL[s.discipline] || "", s.dept,
+    who ? who.name : "", stripHtml(s.about), s.src
+  ].join(" ").toLowerCase();
+
+  return query.toLowerCase().split(/\s+/).filter(Boolean).every(w =>
+    hay.includes(w) || disciplinesFor(w).includes(s.discipline)
+  );
+}
+
+const isExt = s => s.kind === "external";
+// "external" is the fallback when nobody recorded a specific source, so it
+// reads as a category rather than a place. Phrase those two cases differently.
+const vague  = s => /^external$/i.test(s.source);
+const origin = s => vague(s) ? "found outside the company" : `from ${s.source}`;
+
+function rowHTML(s, opts = {}) {
+  const who = personById[s.author];
+  const also = opts.also || [];
+
+  const sub = opts.kindLabel
+    ? `<div class="row-sub"><span class="kind ${opts.kindClass || ""}">${esc(opts.kindLabel)}</span></div>`
+    : isExt(s)
+      ? `<div class="row-sub">Shared by ${esc(who.name)} &middot; ${esc(origin(s))}</div>`
+      : `<div class="row-sub">${esc(who.name)} &middot; ${esc(who.role)}</div>`;
+
+  // When several people have the same skill this row stands for all of them, so
+  // it says so rather than repeating the entry once per person.
+  const shared = also.length
+    ? `<div class="row-sub">Also from ${esc(also.join(", "))}</div>`
+    : "";
+
+  return `
+    <button class="row" data-skill="${esc(key(s))}">
+      <span class="row-tag disc-${DISC_SLOT[s.discipline]}">${esc(DISC_LABEL[s.discipline] || s.discipline)}</span>
+      <span class="row-head">
+        <span class="row-name">${esc(s.name)}${isExt(s) ? `<span class="ext">${esc(s.source)}</span>` : ""}</span>
+        <span class="row-meta">${s.installs} installed</span>
+      </span>
+      <div class="row-desc">${esc(s.desc)}</div>
+      ${sub}${shared}
+    </button>`;
+}
+
+function render() {
+  // Nobody has published yet. This is the first thing anyone sees, so it has
+  // to explain what the page is for rather than looking broken.
+  if (!SKILLS.length) {
+    $("side").hidden = true;
+    $("count").textContent = "";
+    $("world").innerHTML = `
+      <div class="empty-hub">
+        <h2>Nothing published yet</h2>
+        <p>This is where the Claude skills people at your company have written will
+           appear — what each one does, who wrote it, and how to get it.</p>
+        <p>To add yours:</p>
+        <ol>
+          <li>Copy the <code>publish-skills</code> folder from <code>tools/</code>
+              into your own skills folder</li>
+          <li>Ask Claude to publish your skills</li>
+          <li>It will show you what it found, check each one before anything
+              leaves your machine, and put them here</li>
+        </ol>
+      </div>`;
+    return;
+  }
+
+  const shown = SKILLS.filter(matches);
+  $("count").textContent = shown.length === SKILLS.length
+    ? `${SKILLS.length} skills`
+    : `${shown.length} of ${SKILLS.length}`;
+
+  renderSidebar(shown);
+  renderMap(shown);
+}
+
+// The library rail. Same two groupings as before, now beside the canvas
+// instead of replacing it.
+function renderSidebar(shown) {
+  if (!shown.length) {
+    $("side-list").innerHTML = `<p class="empty">No skills match. Try a broader term, or clear the filters.</p>`;
+    return;
+  }
+
+  if (view === "all") {
+    // Two people having the same skill is one entry with a count, not two rows.
+    // The most-installed copy is the one shown, since that is the one people
+    // have actually been taking.
+    const byName = new Map();
+    for (const s of shown) {
+      if (!byName.has(s.id)) byName.set(s.id, []);
+      byName.get(s.id).push(s);
+    }
+
+    $("side-list").innerHTML = [...byName.values()].map(list => {
+      list.sort((a, b) => b.installs - a.installs || a.author.localeCompare(b.author));
+      const also = list.slice(1)
+        .map(x => (personById[x.author] || {}).name || x.author);
+      return rowHTML(list[0], { also });
+    }).join("");
+    return;
+  }
+
+  $("side-list").innerHTML = PEOPLE.map(p => {
+    const authored = shown.filter(s => s.author === p.id);
+    const refs = REFS[p.id] || { installed: [], forked: [] };
+
+    const installed = refs.installed
+      .map(ref => skillByKey[ref])
+      .filter(s => s && matches(s))
+      .map(s => rowHTML(s, {
+        kindLabel: `Installed from ${personById[s.author].name}`
+      }));
+
+    const forked = refs.forked
+      .map(f => ({ s: skillByKey[`${p.id}/${f.id}`], from: f.from }))
+      .filter(x => x.s && matches(x.s))
+      .map(x => rowHTML(x.s, {
+        kindLabel: `Forked from ${x.from}`,
+        kindClass: "kind-forked"
+      }));
+
+    const body = [...authored.map(s => rowHTML(s)), ...installed, ...forked];
+    if (!body.length) return "";
+
+    return `<div class="group-label">${esc(p.name)}<span class="role">${esc(p.role)}</span></div>${body.join("")}`;
+  }).join("") || `<p class="empty">No skills match.</p>`;
+}
+
+// ---------------------------------------------------------------------------
+// Mermaid flowcharts, rendered here rather than by a library.
+//
+// Mermaid itself is 3.4MB, which is 30x this whole page, and it would have to
+// be re-served on every load. Skill diagrams are all the same shape — a flow of
+// boxes with a few branches — so this handles that subset and nothing else.
+// Anything it cannot parse falls back to showing the source, which is honest
+// and still readable. A skill can also ship a hand-drawn diagram.svg instead.
+//
+// Supported: flowchart/graph TD|TB|LR, [rect] (round) {diamond} ([stadium]),
+// --> edges with optional |labels|, and -.-> / ==> drawn the same way.
+// ---------------------------------------------------------------------------
+function parseMermaid(src) {
+  const lines = String(src || "").split(/\r?\n/)
+    .map(l => l.replace(/%%.*$/, "").trim())
+    .filter(Boolean);
+  if (!lines.length) return null;
+
+  const head = lines[0].match(/^(?:flowchart|graph)\s+(TD|TB|LR|RL)\b/i);
+  if (!head) return null;
+  const dir = head[1].toUpperCase() === "LR" || head[1].toUpperCase() === "RL" ? "LR" : "TD";
+
+  const nodes = new Map();
+  const edges = [];
+  const SHAPES = [
+    [/^([A-Za-z0-9_.-]+)\(\[([^\]]*)\]\)/, "stadium"],
+    [/^([A-Za-z0-9_.-]+)\{([^}]*)\}/, "diamond"],
+    [/^([A-Za-z0-9_.-]+)\[([^\]]*)\]/, "rect"],
+    [/^([A-Za-z0-9_.-]+)\(([^)]*)\)/, "round"],
+    [/^([A-Za-z0-9_.-]+)/, "rect"]
+  ];
+
+  const readNode = chunk => {
+    chunk = chunk.trim();
+    for (const [re, shape] of SHAPES) {
+      const m = chunk.match(re);
+      if (!m) continue;
+      const id = m[1];
+      const label = (m[2] !== undefined ? m[2] : id).replace(/^["']|["']$/g, "").replace(/<br\s*\/?>/gi, "\n");
+      if (!nodes.has(id)) nodes.set(id, { id, label, shape });
+      else if (m[2] !== undefined) { nodes.get(id).label = label; nodes.get(id).shape = shape; }
+      return id;
+    }
+    return null;
+  };
+
+  for (const line of lines.slice(1)) {
+    // one statement may chain: A --> B --> C
+    const parts = line.split(/\s*(?:-{2,}>|-\.->|={2,}>)\s*/);
+    if (parts.length < 2) { if (line) readNode(line); continue; }
+
+    const labels = [...line.matchAll(/(?:-{2,}>|-\.->|={2,}>)\s*\|([^|]*)\|/g)].map(m => m[1].trim());
+    let prev = readNode(parts[0].replace(/\|[^|]*\|\s*$/, ""));
+    for (let i = 1; i < parts.length; i++) {
+      const id = readNode(parts[i].replace(/^\|[^|]*\|\s*/, ""));
+      if (prev && id) edges.push({ from: prev, to: id, label: labels[i - 1] || "" });
+      prev = id;
+    }
+  }
+
+  return nodes.size ? { dir, nodes: [...nodes.values()], edges } : null;
+}
+
+function layoutMermaid(g) {
+  const byId = Object.fromEntries(g.nodes.map(n => [n.id, n]));
+  const indeg = Object.fromEntries(g.nodes.map(n => [n.id, 0]));
+  for (const e of g.edges) if (indeg[e.to] !== undefined) indeg[e.to]++;
+
+  // Longest-path ranking. Cycles cannot extend a rank, so this terminates.
+  const rank = Object.fromEntries(g.nodes.map(n => [n.id, 0]));
+  for (let pass = 0; pass < g.nodes.length; pass++) {
+    let moved = false;
+    for (const e of g.edges) {
+      if (rank[e.to] < rank[e.from] + 1) { rank[e.to] = rank[e.from] + 1; moved = true; }
+    }
+    if (!moved) break;
+  }
+
+  const ranks = [];
+  for (const n of g.nodes) (ranks[rank[n.id]] = ranks[rank[n.id]] || []).push(n);
+
+  const CH = 6.6, LINE = 15, PADX = 14, PADY = 11, GAP = 26, RGAP = 44, MAXW = 22;
+  for (const n of g.nodes) {
+    n.lines = [];
+    for (const para of n.label.split("\n")) {
+      let cur = "";
+      for (const w of para.split(/\s+/)) {
+        if (!cur) cur = w;
+        else if ((cur + " " + w).length <= MAXW) cur += " " + w;
+        else { n.lines.push(cur); cur = w; }
+      }
+      if (cur) n.lines.push(cur);
+    }
+    if (!n.lines.length) n.lines = [n.id];
+    const widest = Math.max(...n.lines.map(l => l.length));
+    n.w = Math.max(76, Math.round(widest * CH) + PADX * 2 + (n.shape === "diamond" ? 22 : 0));
+    n.h = n.lines.length * LINE + PADY * 2;
+  }
+
+  const across = g.dir === "TD" ? "w" : "h";
+  const along  = g.dir === "TD" ? "h" : "w";
+
+  let cursor = 0;
+  const bandSize = [];
+  ranks.forEach((band, i) => {
+    bandSize[i] = Math.max(...band.map(n => n[along]));
+    const total = band.reduce((t, n) => t + n[across], 0) + GAP * (band.length - 1);
+    let off = -total / 2;
+    for (const n of band) {
+      if (g.dir === "TD") { n.x = off + n.w / 2; n.y = cursor + n.h / 2; }
+      else                { n.y = off + n.h / 2; n.x = cursor + n.w / 2; }
+      off += n[across] + GAP;
+    }
+    cursor += bandSize[i] + RGAP;
+  });
+
+  const pad = 12;
+  const minX = Math.min(...g.nodes.map(n => n.x - n.w / 2)) - pad;
+  const maxX = Math.max(...g.nodes.map(n => n.x + n.w / 2)) + pad;
+  const minY = Math.min(...g.nodes.map(n => n.y - n.h / 2)) - pad;
+  const maxY = Math.max(...g.nodes.map(n => n.y + n.h / 2)) + pad;
+  for (const n of g.nodes) { n.x -= minX; n.y -= minY; }
+
+  return { ...g, byId, width: maxX - minX, height: maxY - minY };
+}
+
+function mermaidSvg(src) {
+  const parsed = parseMermaid(src);
+  if (!parsed) return null;
+  let g;
+  try { g = layoutMermaid(parsed); } catch (e) { return null; }
+  if (!isFinite(g.width) || !isFinite(g.height)) return null;
+
+  const shapePath = n => {
+    const x = n.x - n.w / 2, y = n.y - n.h / 2;
+    if (n.shape === "diamond") {
+      return `<polygon points="${n.x},${y} ${x + n.w},${n.y} ${n.x},${y + n.h} ${x},${n.y}" class="mn"/>`;
+    }
+    const r = n.shape === "stadium" ? n.h / 2 : n.shape === "round" ? 12 : 5;
+    return `<rect x="${x}" y="${y}" width="${n.w}" height="${n.h}" rx="${r}" class="mn"/>`;
+  };
+
+  const edge = e => {
+    const a = g.byId[e.from], b = g.byId[e.to];
+    if (!a || !b) return "";
+    let d, lx, ly;
+    if (g.dir === "TD") {
+      const y1 = a.y + a.h / 2, y2 = b.y - b.h / 2, mid = (y1 + y2) / 2;
+      d = a.x === b.x ? `M${a.x},${y1} L${b.x},${y2}`
+                      : `M${a.x},${y1} L${a.x},${mid} L${b.x},${mid} L${b.x},${y2}`;
+      lx = (a.x + b.x) / 2; ly = mid - 5;
+    } else {
+      const x1 = a.x + a.w / 2, x2 = b.x - b.w / 2, mid = (x1 + x2) / 2;
+      d = a.y === b.y ? `M${x1},${a.y} L${x2},${b.y}`
+                      : `M${x1},${a.y} L${mid},${a.y} L${mid},${b.y} L${x2},${b.y}`;
+      lx = mid; ly = (a.y + b.y) / 2 - 5;
+    }
+    return `<path d="${d}" class="me" marker-end="url(#mah)"/>` +
+      (e.label ? `<text x="${lx}" y="${ly}" class="mel">${esc(e.label)}</text>` : "");
+  };
+
+  const label = n => n.lines.map((l, i) =>
+    `<tspan x="${n.x}" dy="${i === 0 ? -((n.lines.length - 1) * 15) / 2 : 15}">${esc(l)}</tspan>`
+  ).join("");
+
+  return `<svg viewBox="0 0 ${Math.round(g.width)} ${Math.round(g.height)}" class="mmd"
+     xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Diagram of how this skill works">
+    <defs><marker id="mah" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7"
+      orient="auto-start-reverse"><path d="M0,1 L7,4 L0,7 z" class="mam"/></marker></defs>
+    ${g.edges.map(edge).join("")}
+    ${g.nodes.map(n => shapePath(n) +
+      `<text x="${n.x}" y="${n.y}" class="mt" dominant-baseline="middle">${label(n)}</text>`).join("")}
+  </svg>`;
+}
+
+// ---------------------------------------------------------------------------
+// map view
+//
+// Who on a team is using what, at a glance. Grouped by team, then a card per
+// person, then their skills grouped by discipline, in DISC_ORDER.
+// ---------------------------------------------------------------------------
+// ---------------------------------------------------------------------------
+// Open canvas
+//
+// Each skill is its own box that moves independently. A person is a frame
+// computed from where their skill boxes actually are, so dragging one out
+// stretches their frame rather than breaking the grouping.
+// ---------------------------------------------------------------------------
+const SK_W = 204, SK_H = 56, SK_GAP = 10;
+const P_PAD = 18, P_HEAD = 66, P_GAP = 54;
+
+function skillKeys(shown) {
+  const byPerson = new Map();
+  for (const s of shown) {
+    if (!byPerson.has(s.author)) byPerson.set(s.author, []);
+    byPerson.get(s.author).push(s);
+  }
+  for (const list of byPerson.values()) {
+    list.sort((a, b) => (DISC_ORDER.indexOf(a.discipline) - DISC_ORDER.indexOf(b.discipline))
+      || a.name.localeCompare(b.name));
+  }
+  return byPerson;
+}
+
+function layoutCanvas(shown) {
+  const byPerson = skillKeys(shown);
+  const people = [...byPerson.entries()].sort((a, b) =>
+    ((personById[a[0]] || {}).name || a[0]).localeCompare((personById[b[0]] || {}).name || b[0]));
+
+  const boxes = [];
+  let cursorX = 0, rowY = 0, rowTall = 0;
+  const perRow = Math.max(1, Math.ceil(Math.sqrt(people.length)));
+  let inRow = 0;
+
+  for (const [pid, list] of people) {
+    // Cluster into a rough square rather than one tall column, so a person
+    // reads as a block of work instead of a list.
+    const cols = Math.min(3, Math.max(1, Math.round(Math.sqrt(list.length))));
+    const rows = Math.ceil(list.length / cols);
+
+    list.forEach((s, i) => boxes.push({
+      k: key(s), skill: s, person: pid,
+      x: cursorX + P_PAD + (i % cols) * (SK_W + SK_GAP),
+      y: rowY + P_HEAD + P_PAD + Math.floor(i / cols) * (SK_H + SK_GAP)
+    }));
+
+    const frameW = cols * SK_W + (cols - 1) * SK_GAP + P_PAD * 2;
+    const frameH = rows * SK_H + (rows - 1) * SK_GAP + P_HEAD + P_PAD * 2;
+    cursorX += frameW + P_GAP;
+    rowTall = Math.max(rowTall, frameH);
+    if (++inRow >= perRow) { inRow = 0; cursorX = 0; rowY += rowTall + P_GAP; rowTall = 0; }
+  }
+
+  // Your arrangement comes back with whoAmI rather than in the page data. It
+  // used to live in the shared index, which meant every nudge of a box threw
+  // that index away and made the next person to open the atlas wait for a full
+  // rebuild. LAYOUTS is still read for the offline snapshot, which has no
+  // server to ask.
+  const saved = (ME.known && ME.layout) ||
+    (ME.known && typeof LAYOUTS !== "undefined" && LAYOUTS[ME.person]) || {};
+  let mine = {};
+  if (!BACKEND || !ME.known) {
+    try { mine = JSON.parse(localStorage.getItem("atlas-layout") || "{}"); } catch (e) {}
+  }
+  for (const b of boxes) {
+    const pos = mine[b.k] || saved[b.k];
+    if (pos && isFinite(pos.x) && isFinite(pos.y)) { b.x = pos.x; b.y = pos.y; }
+  }
+
+  return { boxes, people: people.map(e => e[0]) };
+}
+
+// A person's frame is derived from where their boxes are, never stored.
+function frameFor(pid) {
+  const mine = [...document.querySelectorAll(`.sk[data-person="${CSS.escape(pid)}"]`)];
+  if (!mine.length) return null;
+  let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+  for (const el of mine) {
+    const x = parseFloat(el.style.left) || 0, y = parseFloat(el.style.top) || 0;
+    x0 = Math.min(x0, x); y0 = Math.min(y0, y);
+    x1 = Math.max(x1, x + SK_W); y1 = Math.max(y1, y + el.offsetHeight);
+  }
+  return { x: x0 - P_PAD, y: y0 - P_PAD - P_HEAD, w: (x1 - x0) + P_PAD * 2, h: (y1 - y0) + P_PAD * 2 + P_HEAD };
+}
+
+function redrawFrames(people) {
+  const world = $("world");
+  if (!world) return;
+  for (const pid of people) {
+    const f = frameFor(pid);
+    const el = world.querySelector(`.pf[data-frame="${CSS.escape(pid)}"]`);
+    if (!f || !el) continue;
+    el.style.left = f.x + "px"; el.style.top = f.y + "px";
+    el.style.width = f.w + "px"; el.style.height = f.h + "px";
+  }
+}
+
+function renderMap(shown) {
+  if (!shown.length) {
+    $("world").innerHTML = "";
+    $("legend").hidden = true;
+    return;
+  }
+
+  const present = DISC_ORDER.filter(d => shown.some(s => s.discipline === d));
+  $("legend").hidden = present.length < 2;
+  $("legend").innerHTML = present.map(d =>
+    `<span><i style="background:var(--s${DISC_SLOT[d]})"></i>${esc(DISC_LABEL[d] || d)}</span>`
+  ).join("");
+
+  const { boxes, people } = layoutCanvas(shown);
+
+  const frames = people.map(pid => {
+    const who = personById[pid] || { name: pid, role: "" };
+    const n = boxes.filter(b => b.person === pid).length;
+    return `<div class="pf" data-frame="${esc(pid)}">
+      <span class="pf-label">
+        <span class="pf-name">${esc(who.name)}</span>
+        <span class="pf-role">${esc(who.role || "No team set")}</span>
+        <span class="pf-count">${n} skill${n === 1 ? "" : "s"}</span>
+      </span>
+    </div>`;
+  }).join("");
+
+  const cards = boxes.map(b => `
+    <div class="sk" data-node="${esc(b.k)}" data-person="${esc(b.person)}"
+         style="left:${b.x}px;top:${b.y}px">
+      <span class="sk-tab disc-${DISC_SLOT[b.skill.discipline]}">${esc(DISC_LABEL[b.skill.discipline] || b.skill.discipline)}</span>
+      <button class="sk-open" data-skill="${esc(b.k)}">${esc(b.skill.name)}</button>
+    </div>`).join("");
+
+  $("world").innerHTML = frames + cards;
+
+  wireCanvas(people);
+  redrawFrames(canvasPeople);
+
+  // Only frame the content on the first draw. Refitting on every filter change
+  // would yank the view out from under someone mid-browse.
+  //
+  // Deferred two frames rather than called inline. fitView measures
+  // offsetWidth on the boxes the innerHTML above just created, and divides by
+  // the canvas's own clientWidth. On a cold load either can still be zero —
+  // flex not resolved, web font not swapped in — and the resulting transform
+  // puts every box off screen. The symptom is that the first thing a new
+  // visitor sees is an empty dot grid, with the whole hub sitting just outside
+  // the viewport until they find the Fit button. Measuring after layout has
+  // settled costs one frame and is the difference between "empty" and "here
+  // is everything".
+  if (!fitted) {
+    fitted = true;
+    requestAnimationFrame(() => requestAnimationFrame(fitView));
+  }
+}
+
+// ---------------------------------------------------------------------------
+// canvas interaction
+// ---------------------------------------------------------------------------
+let cv = { x: 0, y: 0, k: 1 };
+
+function applyTransform() {
+  const w = $("world");
+  if (w) w.style.transform = `translate(${cv.x}px, ${cv.y}px) scale(${cv.k})`;
+}
+
+function worldBounds() {
+  const items = [...document.querySelectorAll(".sk, .pf")];
+  if (!items.length) return { x: 0, y: 0, w: 1, h: 1 };
+  let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+  for (const n of items) {
+    const x = parseFloat(n.style.left) || 0, y = parseFloat(n.style.top) || 0;
+    x0 = Math.min(x0, x); y0 = Math.min(y0, y);
+    x1 = Math.max(x1, x + n.offsetWidth); y1 = Math.max(y1, y + n.offsetHeight);
+  }
+  return { x: x0, y: y0, w: Math.max(1, x1 - x0), h: Math.max(1, y1 - y0) };
+}
+
+function fitView() {
+  const el = $("canvas");
+  if (!el) return;
+  const b = worldBounds(), pad = 44;
+  cv.k = Math.max(0.15, Math.min((el.clientWidth - pad * 2) / b.w, (el.clientHeight - pad * 2) / b.h, 1.1));
+  cv.x = (el.clientWidth - b.w * cv.k) / 2 - b.x * cv.k;
+  cv.y = (el.clientHeight - b.h * cv.k) / 2 - b.y * cv.k;
+  applyTransform();
+}
+
+function zoomAbout(px, py, factor) {
+  const k = Math.min(2.5, Math.max(0.15, cv.k * factor));
+  cv.x = px - (px - cv.x) * (k / cv.k);
+  cv.y = py - (py - cv.y) * (k / cv.k);
+  cv.k = k;
+  applyTransform();
+}
+
+let fitted = false;
+let canvasWired = false;
+let canvasPeople = [];
+
+// The canvas element is part of the page now rather than something render()
+// rebuilds, so its listeners are attached once and only the contents change.
+function wireCanvas(people) {
+  canvasPeople = people;
+  const el = $("canvas");
+  if (!el || canvasWired) return;
+  canvasWired = true;
+
+  // group is what is being moved: one skill box, or every box belonging to one
+  // person when the frame itself is grabbed. Each entry remembers where it
+  // started, so a drag is always measured from the press rather than
+  // accumulated frame by frame.
+  let mode = null, sx = 0, sy = 0, ox = 0, oy = 0, group = [], moved = false;
+
+  const grab = nodes => nodes.map(n => ({
+    el: n,
+    x: parseFloat(n.style.left) || 0,
+    y: parseFloat(n.style.top) || 0
+  }));
+
+  el.addEventListener("pointerdown", e => {
+    // Reaching for the canvas means you are done with the add panel.
+    if ($("add-panel").dataset.open === "true") closeAdd();
+    if (e.target.closest(".canvas-ui")) return;
+    if (e.target.closest(".sk-open") && e.button === 0) return;   // opening, not dragging
+
+    const skill = e.button === 1 ? null : e.target.closest(".sk");
+    const frame = e.button === 1 ? null : e.target.closest(".pf");
+    moved = false; sx = e.clientX; sy = e.clientY; group = [];
+
+    if (skill) {
+      mode = "node";
+      group = grab([skill]);
+      skill.dataset.drag = "true";
+    } else if (frame) {
+      // Grabbing someone's frame moves that person and nobody else. Before
+      // this, the frame was not a drag target at all, so reaching for it panned
+      // the whole canvas and looked like every box moving at once.
+      const pid = frame.dataset.frame;
+      const own = [...el.querySelectorAll(`.sk[data-person="${CSS.escape(pid)}"]`)];
+      if (!own.length) return;
+      mode = "node";
+      group = grab(own);
+      frame.dataset.drag = "true";
+    } else {
+      mode = "pan"; ox = cv.x; oy = cv.y;
+      el.dataset.panning = "true";
+    }
+    el.setPointerCapture(e.pointerId);
+  });
+
+  el.addEventListener("pointermove", e => {
+    if (!mode) return;
+    const dx = e.clientX - sx, dy = e.clientY - sy;
+    if (Math.abs(dx) > 3 || Math.abs(dy) > 3) moved = true;
+    if (mode === "pan") { cv.x = ox + dx; cv.y = oy + dy; applyTransform(); }
+    else {
+      for (const g of group) {
+        g.el.style.left = (g.x + dx / cv.k) + "px";
+        g.el.style.top = (g.y + dy / cv.k) + "px";
+      }
+      redrawFrames(canvasPeople);
+    }
+  });
+
+  const endDrag = e => {
+    if (mode === "node") {
+      group.forEach(g => { g.el.dataset.drag = "false"; });
+      el.querySelectorAll('.pf[data-drag="true"]').forEach(f => { f.dataset.drag = "false"; });
+      if (moved) { redrawFrames(canvasPeople); scheduleSave(); }
+    }
+    if (mode === "pan") el.dataset.panning = "false";
+    mode = null; group = [];
+    try { el.releasePointerCapture(e.pointerId); } catch (err) {}
+  };
+  el.addEventListener("pointerup", endDrag);
+  el.addEventListener("pointercancel", endDrag);
+
+  // Figma / Miro / Lucid convention: the wheel pans, and only ctrl or cmd plus
+  // wheel zooms. A trackpad pinch arrives as ctrl+wheel, so pinch zooms too.
+  el.addEventListener("wheel", e => {
+    e.preventDefault();
+    if (e.ctrlKey || e.metaKey) {
+      const r = el.getBoundingClientRect();
+      zoomAbout(e.clientX - r.left, e.clientY - r.top, e.deltaY < 0 ? 1.1 : 1 / 1.1);
+    } else {
+      cv.x -= e.shiftKey ? e.deltaY : e.deltaX;
+      cv.y -= e.shiftKey ? 0 : e.deltaY;
+      applyTransform();
+    }
+  }, { passive: false });
+
+  el.addEventListener("auxclick", e => { if (e.button === 1) e.preventDefault(); });
+
+  $("cv-in").addEventListener("click", () => zoomAbout(el.clientWidth / 2, el.clientHeight / 2, 1.2));
+  $("cv-out").addEventListener("click", () => zoomAbout(el.clientWidth / 2, el.clientHeight / 2, 1 / 1.2));
+  $("cv-fit").addEventListener("click", fitView);
+  $("cv-reset").addEventListener("click", () => {
+    try { localStorage.removeItem("atlas-layout"); } catch (e) {}
+    render();
+  });
+
+}
+
+function currentPositions() {
+  const out = {};
+  document.querySelectorAll(".sk").forEach(n => {
+    out[n.dataset.node] = {
+      x: Math.round(parseFloat(n.style.left) || 0),
+      y: Math.round(parseFloat(n.style.top) || 0)
+    };
+  });
+  return out;
+}
+
+function saveLocalLayout() {
+  if (BACKEND) return;   // shared layout is authoritative; nothing to shadow it with
+  try { localStorage.setItem("atlas-layout", JSON.stringify(currentPositions())); } catch (e) {}
+}
+
+// ---------------------------------------------------------------------------
+// Backend
+//
+// When the page is served by the Apps Script web app it can call server
+// functions directly. No CORS, no endpoint, no key. Opened as a downloaded
+// file there is no backend, so the same actions produce a file to drop in
+// instead. Everything below works either way.
+// ---------------------------------------------------------------------------
+const BACKEND = (typeof google !== "undefined" && google.script && google.script.run)
+  ? google.script.run : null;
+
+// Arrangements belong to whoever made them. Moving a box should never rearrange
+// the board for everyone else, but it should follow you to another machine, so
+// it saves into your own profile shortly after you stop dragging. No button.
+let saveTimer = null;
+
+function noteCanvas(msg, clearAfter) {
+  const el = $("cv-note");
+  if (!el) return;
+  el.textContent = msg;
+  if (clearAfter) setTimeout(() => { if (el.textContent === msg) el.textContent = ""; }, clearAfter);
+}
+
+function scheduleSave() {
+  if (!BACKEND || !ME.known) { saveLocalLayout(); return; }
+  clearTimeout(saveTimer);
+  saveTimer = setTimeout(() => {
+    noteCanvas("Saving...");
+    callBackend("saveLayout", currentPositions())
+      .then(res => noteCanvas(res && res.ok ? "Arrangement saved" : ((res && res.message) || "Could not save"), 2500))
+      .catch(() => noteCanvas("Could not save", 4000));
+  }, 800);
+}
+
+function callBackend(fn, arg) {
+  return new Promise((resolve, reject) => {
+    BACKEND.withSuccessHandler(resolve).withFailureHandler(reject)[fn](arg);
+  });
+}
+
+// ---------------------------------------------------------------------------
+// staying current
+//
+// The page is built from PEOPLE, SKILLS and REFS. Those are const bindings, but
+// their contents are not, so fresh data is poured into the same objects rather
+// than rebinding names the whole page is written against.
+//
+// One path serves three cases: you published something, you deleted something,
+// or somebody else did and the poll noticed.
+// ---------------------------------------------------------------------------
+let hubVersion = null;
+let refreshing = false;
+
+function applyData(d) {
+  if (!d || !Array.isArray(d.SKILLS) || !Array.isArray(d.PEOPLE)) return false;
+
+  PEOPLE.length = 0;
+  d.PEOPLE.forEach(x => PEOPLE.push(x));
+  SKILLS.length = 0;
+  d.SKILLS.forEach(x => SKILLS.push(x));
+
+  for (const k of Object.keys(REFS)) delete REFS[k];
+  for (const k in d.REFS) REFS[k] = d.REFS[k];
+
+  for (const k of Object.keys(personById)) delete personById[k];
+  PEOPLE.forEach(x => { personById[x.id] = x; });
+
+  for (const k of Object.keys(skillByKey)) delete skillByKey[k];
+  SKILLS.forEach(x => { skillByKey[key(x)] = x; });
+
+  // Skill text is fetched on demand and cached for the session. Anything still
+  // in the hub keeps its text; anything deleted takes its cache entry with it.
+  for (const k of Object.keys(srcCache)) {
+    if (!skillByKey[k]) delete srcCache[k];
+    else if (!skillByKey[k].src) skillByKey[k].src = srcCache[k];
+  }
+
+  if (d.UPDATED) $("updated").textContent = "Updated " + d.UPDATED;
+
+  buildFilters();
+  render();
+  return true;
+}
+
+// Fetches the current hub and redraws. Returns a promise so a publish can wait
+// for it before saying it is done.
+function refreshFromHub() {
+  if (!BACKEND || refreshing) return Promise.resolve(false);
+  refreshing = true;
+  return callBackend("getData")
+    .then(res => {
+      refreshing = false;
+      if (!res || !res.ok) return false;
+      hubVersion = res.version;
+      return applyData(res.data);
+    })
+    .catch(() => { refreshing = false; return false; });
+}
+
+// Poll for other people's changes. The check is a single script-property read
+// on the server with no Drive access, so this is cheap enough to leave running;
+// the expensive call only happens when the number has actually moved.
+//
+// Paused while the tab is hidden, so a page left open overnight is not still
+// asking every half minute in the morning.
+const POLL_MS = 30000;
+
+function startPolling() {
+  if (!BACKEND) return;
+  setInterval(() => {
+    if (document.hidden || refreshing) return;
+    callBackend("getStamp")
+      .then(res => {
+        if (!res || typeof res.version !== "number") return;
+        if (hubVersion === null) { hubVersion = res.version; return; }
+        if (res.version !== hubVersion) refreshFromHub();
+      })
+      .catch(() => { /* a missed poll costs nothing; the next one covers it */ });
+  }, POLL_MS);
+
+  // Coming back to the tab is the moment someone is most likely to be looking
+  // at something stale, so check then too rather than waiting out the interval.
+  document.addEventListener("visibilitychange", () => {
+    if (!document.hidden) {
+      callBackend("getStamp")
+        .then(res => {
+          if (res && typeof res.version === "number" && hubVersion !== null &&
+              res.version !== hubVersion) refreshFromHub();
+        })
+        .catch(() => {});
+    }
+  });
+}
+
+// The server has already recorded it. Mirror that locally so the count and the
+// map move now, instead of on the next page load.
+function noteSaved(k) {
+  if (!ME.known) return;
+
+  if (!REFS[ME.person]) REFS[ME.person] = { installed: [], forked: [] };
+  if (REFS[ME.person].installed.indexOf(k) === -1) REFS[ME.person].installed.push(k);
+
+  if (!personById[ME.person]) {
+    const me = {
+      id: ME.person,
+      name: ME.display_name || ME.person,
+      role: ME.team || "",
+      dept: ME.team || ""
+    };
+    PEOPLE.push(me);
+    personById[ME.person] = me;
+  }
+
+  const s = skillByKey[k];
+  if (s) s.installs++;
+  render();
+}
+
+// Ask the server who is looking. Only answers under "Execute as: User accessing
+// the web app"; otherwise the page carries on asking people to type a name.
+function loadIdentity() {
+  if (!BACKEND) { syncClear(); return; }
+  callBackend("whoAmI")
+    .then(me => {
+      if (!me || !me.known) { syncClear(); startPolling(); return; }
+      ME = me;
+      if (typeof me.version === "number") hubVersion = me.version;
+      startPolling();
+
+      const nameField = $("name-field");
+      if (nameField) {
+        const shown = me.display_name || me.person;
+        nameField.innerHTML =
+          `<label>Publishing as</label>
+           <div class="who">${esc(shown)}<span class="who-sub">${esc(me.email)}</span></div>
+           <input type="hidden" id="add-name" value="${esc(shown)}">`;
+      }
+      if (me.team) $("add-team").value = me.team;
+
+      // Your saved arrangement arrived with your identity, which the first draw
+      // did not have. Redraw so boxes land where you left them.
+      syncClear();
+      render();
+    })
+    .catch(() => { syncClear(); startPolling(); });
+}
+
+// Mermaid source first, then a hand-drawn SVG, then nothing. If the source is
+// there but this renderer cannot handle it, show the text rather than an error:
+// a reader can still follow it, and the author can see what needs simplifying.
+// Fetched text is kept for the session: reopening a skill should not cost a
+// second round trip, and Copy needs it to be there the moment it is pressed.
+const srcCache = {};
+
+function loadSource(k) {
+  const done = text => {
+    const s = skillByKey[k];
+    if (s) s.src = text;
+    const el = $("p-src");
+    if (el && $("panel").dataset.open === "true") el.textContent = text;
+  };
+
+  if (srcCache[k]) { done(srcCache[k]); return; }
+  if (!BACKEND) { done("Open this skill's SKILL.md in the hub folder to read it."); return; }
+
+  callBackend("getSkillSource", k)
+    .then(res => {
+      if (res && res.ok) { srcCache[k] = res.src; done(res.src); }
+      else done((res && res.message) || "Could not load this skill's text.");
+    })
+    .catch(() => done("Could not load this skill's text."));
+}
+
+function diagramBlock(s) {
+  if (s.mmd) {
+    const svg = mermaidSvg(s.mmd);
+    if (svg) return `<h3>How it flows</h3>${svg}`;
+    return `<h3>How it flows</h3><pre class="source">${esc(s.mmd)}</pre>
+      <p class="install-note">This diagram uses Mermaid features the atlas doesn't draw,
+         so here is the source. Simplifying it to plain boxes and arrows would render it.</p>`;
+  }
+  if (s.diagram) return `<h3>Diagram</h3><div class="diagram">${s.diagram}</div>`;
+  return "";
+}
+
+// ---------------------------------------------------------------------------
+// detail panel
+// ---------------------------------------------------------------------------
+let lastFocus = null;
+
+function openPanel(k) {
+  const s = skillByKey[k];
+  if (!s) return;
+  const who = personById[s.author];
+  lastFocus = document.activeElement;
+
+  // Only your own, and only when the server can actually tell it is you. Under
+  // "Execute as: Me" nobody but the deployer is identifiable, so nobody else
+  // sees this. The server checks the same thing again and is the one that counts.
+  const mine = !!(BACKEND && ME.known && s.author === ME.person);
+
+  $("panel").style.setProperty("--accent-disc", `var(--s${DISC_SLOT[s.discipline]})`);
+  $("p-name").innerHTML = esc(s.name) + (isExt(s) ? `<span class="ext">${esc(s.source)}</span>` : "");
+
+  const uptake = s.installs === 1
+    ? "1 person has this installed"
+    : `${s.installs} people have this installed`;
+
+  $("p-by").textContent = isExt(s)
+    ? `Shared by ${who.name} · ${origin(s)} · ${uptake}`
+    : `${who.name} · ${who.role} · updated ${s.updated} · ${uptake}`;
+
+  // External skills are copied in full like any other, so getting one works
+  // identically. The origin is shown as information, not as a different route.
+  const provenance = !isExt(s) ? "" : `
+    <h3>Where this came from</h3>
+    <p>Not written at your company. ${esc(who.name)} ${vague(s) ? "found it online" : `found it via ${esc(s.source)}`}${
+      s.captured ? ` and added it on ${esc(s.captured)}` : ""}. The copy below is
+      what they published${s.url
+        ? `. Original: <a href="${esc(s.url)}" target="_blank" rel="noopener noreferrer">${esc(s.url)}</a>`
+        : ", and there's no source link on file"}.</p>
+    ${s.why ? `<div class="why"><p>${esc(s.why)}</p><cite>${esc(who.name)}</cite></div>` : ""}`;
+
+  $("p-body").innerHTML = `
+    <p>${esc(s.desc)}</p>
+
+    <h3>What it does</h3>
+    ${s.about
+      ? `<div class="about">${s.about}</div>`
+      : `<ol class="steps">${s.steps.map(t => `<li>${esc(t)}</li>`).join("")}</ol>`}
+
+    ${diagramBlock(s)}
+    ${provenance}
+
+    <h3>Get this skill</h3>
+    <div class="install">
+      <button class="btn" id="copy-src">Copy skill</button>
+      <span class="install-note" id="save-note"></span>
+    </div>
+    <p class="install-note">Paste it into Claude and ask it to save this as a skill. Nothing to install and no setup, on any device.</p>
+
+    <h3>Source</h3>
+    <pre class="source" id="p-src">${s.src ? esc(s.src) : "Loading..."}</pre>
+
+    ${mine ? `
+      <div class="owner">
+        <h3>Yours</h3>
+        <p>Publishing again with the same name replaces this one, so you do not
+           need to remove it first.</p>
+        <button class="danger" id="p-del">Delete this skill</button>
+        <span class="install-note" id="del-note"></span>
+      </div>` : ""}`;
+
+  // The live page ships without skill text and asks for it here, so the atlas
+  // stays small however many skills the hub holds. The downloadable snapshot
+  // has it inline already, because it has no server to ask.
+  if (!s.src) loadSource(key(s));
+
+  // Copying is how most people take a skill, so it is the honest moment to
+  // record that they have it. Without this the map only ever shows publishing,
+  // never adoption, and the install counts stay meaningless.
+  $("copy-src").onclick = e => {
+    const text = s.src || srcCache[key(s)];
+    if (!text) { e.target.textContent = "Still loading..."; return; }
+    copy(text, e.target, "Copy skill");
+    if (BACKEND && ME.known && s.author !== ME.person) {
+      callBackend("recordSave", key(s))
+        .then(res => {
+          if (res && res.ok && res.changed) {
+            $("save-note").textContent = "Added to your skills.";
+            noteSaved(key(s));
+          }
+        })
+        .catch(() => { /* copying still worked; the record is a bonus */ });
+    }
+  };
+
+  if (mine) {
+    // Two presses rather than a confirm dialog: the dialog gets clicked through,
+    // and this makes the consequence the label you are reading when you commit.
+    let armed = false;
+    const btn = $("p-del");
+    btn.onclick = () => {
+      if (!armed) {
+        armed = true;
+        btn.textContent = "Really delete " + s.name + "?";
+        btn.classList.add("armed");
+        setTimeout(() => {
+          if (!armed) return;
+          armed = false;
+          btn.textContent = "Delete this skill";
+          btn.classList.remove("armed");
+        }, 5000);
+        return;
+      }
+
+      btn.disabled = true;
+      btn.textContent = "Deleting...";
+      callBackend("deleteSkill", key(s))
+        .then(res => {
+          if (!res || !res.ok) {
+            btn.disabled = false;
+            btn.textContent = "Delete this skill";
+            btn.classList.remove("armed");
+            $("del-note").textContent = (res && res.message) || "Could not delete that.";
+            return;
+          }
+          if (typeof res.version === "number") hubVersion = res.version;
+          closePanel();
+          refreshFromHub();
+        })
+        .catch(() => {
+          btn.disabled = false;
+          btn.textContent = "Delete this skill";
+          btn.classList.remove("armed");
+          $("del-note").textContent = "Could not delete that.";
+        });
+    };
+  }
+
+  $("panel").dataset.open = "true";
+  $("panel").setAttribute("aria-hidden", "false");
+  $("scrim").dataset.open = "true";
+  $("close").focus();
+}
+
+function closePanel() {
+  $("panel").dataset.open = "false";
+  $("panel").setAttribute("aria-hidden", "true");
+  $("scrim").dataset.open = "false";
+  if (lastFocus) lastFocus.focus();
+}
+
+// The clipboard API is blocked in sandboxed iframes, which is where this page
+// runs when served by Apps Script. Copy is the one path that has to work for
+// everyone, so failure falls back to selected text the user can just Ctrl+C.
+function copy(text, btn, label) {
+  const ok = () => {
+    btn.textContent = "Copied";
+    setTimeout(() => { btn.textContent = label; }, 1400);
+  };
+
+  if (navigator.clipboard && window.isSecureContext) {
+    navigator.clipboard.writeText(text).then(ok).catch(() => fallbackCopy(text, btn, label, ok));
+  } else {
+    fallbackCopy(text, btn, label, ok);
+  }
+}
+
+function fallbackCopy(text, btn, label, ok) {
+  const ta = document.createElement("textarea");
+  ta.value = text;
+  ta.setAttribute("readonly", "");
+  ta.style.cssText = "position:fixed;top:0;left:0;width:1px;height:1px;opacity:0;";
+  document.body.appendChild(ta);
+  ta.select();
+  ta.setSelectionRange(0, text.length);
+
+  let copied = false;
+  try { copied = document.execCommand("copy"); } catch (e) { copied = false; }
+  document.body.removeChild(ta);
+
+  if (copied) { ok(); return; }
+
+  // Nothing automatic worked — show it selected so Ctrl+C does the job.
+  showManualCopy(text);
+  btn.textContent = label;
+}
+
+function showManualCopy(text) {
+  const box = $("manual-copy");
+  box.hidden = false;
+  box.querySelector("textarea").value = text;
+  box.querySelector("textarea").focus();
+  box.querySelector("textarea").select();
+}
+
+// ---------------------------------------------------------------------------
+// events
+// ---------------------------------------------------------------------------
+$("q").addEventListener("input", e => { query = e.target.value.trim(); syncClear(); render(); });
+
+const VIEWS = ["all", "people"];
+function setView(v) {
+  view = v;
+  VIEWS.forEach(x => $("view-" + x).setAttribute("aria-pressed", String(x === v)));
+  render();
+}
+VIEWS.forEach(v => $("view-" + v).addEventListener("click", () => setView(v)));
+
+function syncClear() {
+  $("f-clear").hidden = !(fDept || fDisc.size || query || fMine);
+  $("f-mine").hidden = !ME.known;
+  $("f-mine").setAttribute("aria-pressed", String(fMine));
+  $("f-mine").style.fontWeight = fMine ? "600" : "400";
+}
+
+$("f-mine").addEventListener("click", () => { fMine = !fMine; syncClear(); render(); });
+
+$("f-dept").addEventListener("change", e => { fDept = e.target.value; syncClear(); render(); });
+
+function openDisc(on) {
+  $("f-disc-menu").hidden = !on;
+  $("f-disc-btn").setAttribute("aria-expanded", String(on));
+}
+
+$("f-disc-btn").addEventListener("click", e => {
+  e.stopPropagation();
+  openDisc($("f-disc-menu").hidden);
+});
+
+// The menu stays open while you tick boxes. Closing on every choice would make
+// picking three disciplines three trips.
+$("f-disc-menu").addEventListener("click", e => e.stopPropagation());
+
+$("f-disc-menu").addEventListener("change", e => {
+  const box = e.target.closest("input[type=checkbox]");
+  if (!box) return;
+  if (box.checked) fDisc.add(box.value); else fDisc.delete(box.value);
+  syncDiscButton(); syncClear(); render();
+});
+
+$("f-disc-menu").addEventListener("click", e => {
+  const all = e.target.closest("[data-disc-all]");
+  const none = e.target.closest("[data-disc-none]");
+  if (!all && !none) return;
+  $("f-disc-menu").querySelectorAll("input[type=checkbox]").forEach(b => {
+    b.checked = !!all;
+    if (all) fDisc.add(b.value); else fDisc.delete(b.value);
+  });
+  syncDiscButton(); syncClear(); render();
+});
+
+document.addEventListener("click", () => openDisc(false));
+document.addEventListener("keydown", e => { if (e.key === "Escape") openDisc(false); });
+
+$("f-clear").addEventListener("click", () => {
+  fDept = query = ""; fMine = false; fDisc.clear();
+  $("f-dept").value = ""; $("q").value = "";
+  $("f-disc-menu").querySelectorAll("input[type=checkbox]").forEach(b => { b.checked = false; });
+  syncDiscButton(); syncClear(); render();
+});
+
+$("side-list").addEventListener("click", e => {
+  const hit = e.target.closest(".row");
+  if (hit) openPanel(hit.dataset.skill);
+});
+
+$("canvas").addEventListener("click", e => {
+  const hit = e.target.closest(".sk-open");
+  if (hit) openPanel(hit.dataset.skill);
+});
+
+// Drag the divider to resize the library. Width is remembered per browser, and
+// the column count follows from it because the list is an auto-fill grid.
+(function () {
+  const grip = $("grip");
+  if (!grip) return;
+
+  const apply = w => {
+    const clamped = Math.max(220, Math.min(760, w));
+    document.documentElement.style.setProperty("--side-w", clamped + "px");
+    try { localStorage.setItem("atlas-side-w", String(clamped)); } catch (e) {}
+    return clamped;
+  };
+
+  let stored = 0;
+  try { stored = parseInt(localStorage.getItem("atlas-side-w") || "0", 10); } catch (e) {}
+  if (stored) apply(stored);
+
+  let dragging = false;
+  grip.addEventListener("pointerdown", e => {
+    dragging = true;
+    grip.dataset.drag = "true";
+    grip.setPointerCapture(e.pointerId);
+    e.preventDefault();
+  });
+  grip.addEventListener("pointermove", e => {
+    if (!dragging) return;
+    apply(e.clientX - $("side").getBoundingClientRect().left);
+  });
+  const stop = e => {
+    if (!dragging) return;
+    dragging = false;
+    grip.dataset.drag = "false";
+    try { grip.releasePointerCapture(e.pointerId); } catch (err) {}
+    fitView();
+  };
+  grip.addEventListener("pointerup", stop);
+  grip.addEventListener("pointercancel", stop);
+})();
+
+$("side-hide").addEventListener("click", () => {
+  const side = $("side");
+  side.hidden = !side.hidden;
+  fitView();
+});
+
+$("manual-copy-close").addEventListener("click", () => { $("manual-copy").hidden = true; });
+
+$("close").addEventListener("click", closePanel);
+$("scrim").addEventListener("click", closePanel);
+document.addEventListener("keydown", e => {
+  if (e.key === "Escape") { closePanel(); closeAdd(); $("manual-copy").hidden = true; }
+  if (e.key === "/" && document.activeElement !== $("q")
+      && !/^(INPUT|TEXTAREA)$/.test(document.activeElement.tagName)) {
+    e.preventDefault(); $("q").focus();
+  }
+});
+
+// ---------------------------------------------------------------------------
+// Add your skills
+//
+// A static page cannot write to Drive — no server, and no credentials it could
+// safely hold. What it can do is remove every part that requires knowing how the
+// hub is laid out: work out which skills are yours, take the summaries, and hand
+// back a correctly shaped folder. One drag, no structure to understand.
+// ---------------------------------------------------------------------------
+
+// CRC-32, table-driven. A ZIP entry stores one per file.
+const CRC_TABLE = (() => {
+  const t = new Uint32Array(256);
+  for (let n = 0; n < 256; n++) {
+    let c = n;
+    for (let k = 0; k < 8; k++) c = c & 1 ? 0xEDB88320 ^ (c >>> 1) : c >>> 1;
+    t[n] = c >>> 0;
+  }
+  return t;
+})();
+
+function crc32(bytes) {
+  let crc = 0xFFFFFFFF;
+  for (let i = 0; i < bytes.length; i++) crc = CRC_TABLE[(crc ^ bytes[i]) & 0xFF] ^ (crc >>> 8);
+  return (crc ^ 0xFFFFFFFF) >>> 0;
+}
+
+// Uncompressed (STORE) ZIP, written by hand so the page stays self-contained —
+// no library, no CDN, works from a file:// URL.
+function makeZip(files) {
+  const enc = new TextEncoder();
+  const u16 = n => [n & 0xFF, (n >>> 8) & 0xFF];
+  const u32 = n => [n & 0xFF, (n >>> 8) & 0xFF, (n >>> 16) & 0xFF, (n >>> 24) & 0xFF];
+
+  const parts = [], central = [];
+  let offset = 0;
+
+  for (const f of files) {
+    const name = enc.encode(f.path);
+    const data = enc.encode(f.text);
+    const crc = crc32(data);
+
+    // 0x0800 flags the filename as UTF-8
+    const local = new Uint8Array([].concat(
+      u32(0x04034b50), u16(20), u16(0x0800), u16(0), u16(0), u16(0),
+      u32(crc), u32(data.length), u32(data.length), u16(name.length), u16(0)
+    ));
+    parts.push(local, name, data);
+
+    central.push({
+      header: new Uint8Array([].concat(
+        u32(0x02014b50), u16(20), u16(20), u16(0x0800), u16(0), u16(0), u16(0),
+        u32(crc), u32(data.length), u32(data.length),
+        u16(name.length), u16(0), u16(0), u16(0), u16(0), u32(0), u32(offset)
+      )),
+      name
+    });
+
+    offset += local.length + name.length + data.length;
+  }
+
+  const cdStart = offset;
+  let cdSize = 0;
+  for (const c of central) { parts.push(c.header, c.name); cdSize += c.header.length + c.name.length; }
+
+  parts.push(new Uint8Array([].concat(
+    u32(0x06054b50), u16(0), u16(0),
+    u16(files.length), u16(files.length),
+    u32(cdSize), u32(cdStart), u16(0)
+  )));
+
+  return new Blob(parts, { type: "application/zip" });
+}
+
+// Deterministic checks only. Whether something is a customer name is judgment,
+// which is what the Claude route is for — and the panel says so plainly.
+const SECRET_PATTERNS = [
+  [/\bsk-[A-Za-z0-9]{16,}/, "looks like an API key"],
+  [/\bghp_[A-Za-z0-9]{16,}/, "looks like a GitHub token"],
+  [/\bxox[baprs]-[A-Za-z0-9-]{10,}/, "looks like a Slack token"],
+  [/\bAKIA[0-9A-Z]{12,}/, "looks like an AWS key"],
+  [/-----BEGIN [A-Z ]*PRIVATE KEY/, "contains a private key"],
+  [/\b(password|passwd|secret|api[_-]?key|token)\s*[:=]\s*["'][^"']{8,}["']/i, "reads like a credential"]
+];
+
+let found = [];
+
+const slugId = name => (String(name || "").trim().split(/\s+/)[0] || "")
+  .toLowerCase().replace(/[^a-z0-9]/g, "");
+
+function frontmatterDescription(text) {
+  const m = text.match(/^---\r?\n([\s\S]*?)\r?\n---/);
+  if (!m) return "";
+  const lines = m[1].split(/\r?\n/);
+  for (let i = 0; i < lines.length; i++) {
+    const d = lines[i].match(/^description:\s*(>[-]?|\|[-]?)?\s*(.*)$/);
+    if (!d) continue;
+    if (d[1]) {
+      const block = [];
+      while (i + 1 < lines.length && /^\s+\S/.test(lines[i + 1])) block.push(lines[++i].trim());
+      return block.join(" ");
+    }
+    return d[2] || "";
+  }
+  return "";
+}
+
+// A dropped folder arrives as directory entries rather than a FileList, so it
+// is walked into the same {file, path} shape the picker produces.
+async function filesFromDrop(dt) {
+  const out = [];
+  const roots = [...(dt.items || [])]
+    .map(i => (i.webkitGetAsEntry ? i.webkitGetAsEntry() : null))
+    .filter(Boolean);
+
+  async function walk(entry, prefix) {
+    if (entry.isFile) {
+      const f = await new Promise((res, rej) => entry.file(res, rej));
+      out.push({ file: f, path: prefix + entry.name });
+      return;
+    }
+    const reader = entry.createReader();
+    let batch;
+    do {
+      // readEntries returns at most 100 at a time and must be called until empty
+      batch = await new Promise((res, rej) => reader.readEntries(res, rej));
+      for (const e of batch) await walk(e, prefix + entry.name + "/");
+    } while (batch.length);
+  }
+
+  for (const r of roots) await walk(r, "");
+  return out;
+}
+
+async function onPick(input) {
+  const files = Array.isArray(input)
+    ? input
+    : [...input].map(f => ({ file: f, path: f.webkitRelativePath || f.name }));
+  if (!files.length) return;
+
+  // Find every SKILL.md and treat its own folder as the skill. That way it does
+  // not matter what shape someone drops: their whole .claude/skills folder, a
+  // hub-shaped skills/<person>/<skill> tree, one skill folder, or loose files.
+  const dirs = new Map();
+  for (const item of files) {
+    const parts = item.path.split("/").filter(Boolean);
+    const name = parts.pop();
+    const dir = parts.join("/");
+    if (!dirs.has(dir)) dirs.set(dir, []);
+    dirs.get(dir).push({ file: item.file, name });
+  }
+
+  found = [];
+  const seen = new Set();
+  let bundles = 0;
+
+  for (const [dir, entries] of dirs) {
+    const skillFile = entries.find(e => e.name === "SKILL.md");
+    if (!skillFile) continue;
+
+    const segs = dir ? dir.split("/") : [];
+
+    // A plugin bundle looks like <bundle>/skills/<skill>/SKILL.md. Its installer
+    // overwrites it on update, so a copy here would be stale and unfixable.
+    if (segs.some((seg, i) => i > 0 && seg === "skills")) { bundles++; continue; }
+
+    const text = await skillFile.file.text();
+
+    // Folder name, or the frontmatter name when the file was dropped loose.
+    let id = segs.length ? segs[segs.length - 1] : "";
+    if (!id) {
+      const m = text.match(/^---[\s\S]*?\bname:\s*([A-Za-z0-9._-]+)/);
+      id = m ? m[1] : "";
+    }
+    if (!id || seen.has(id)) continue;
+    seen.add(id);
+
+    const byName = n => (entries.find(e => e.name === n) || null);
+    const aboutFile = byName("about.md");
+    const mmdFile = byName("diagram.mmd");
+
+    const warnings = SECRET_PATTERNS.filter(([re]) => re.test(text)).map(([, msg]) => msg);
+    found.push({
+      id, text, warnings,
+      about: aboutFile ? (await aboutFile.file.text()).trim() : "",
+      mmd: mmdFile ? (await mmdFile.file.text()).trim() : "",
+      discipline: "", kind: "authored", open: false,
+      on: !warnings.length
+    });
+  }
+
+  found.sort((a, b) => a.id.localeCompare(b.id));
+  renderFound(bundles);
+}
+
+function renderFound(bundleCount) {
+  const box = $("found");
+  box.hidden = false;
+
+  if (!found.length) {
+    box.innerHTML = `<p class="hint">No skills found there. Pick the folder that
+      <em>contains</em> your skill folders — each skill is a folder with a SKILL.md inside.</p>`;
+    $("add-build").disabled = true;
+    return;
+  }
+
+  $("bulk").hidden = false;
+
+  box.innerHTML =
+    `<p class="hint">Found ${found.length} skill${found.length === 1 ? "" : "s"}${
+      bundleCount ? `, skipped ${bundleCount} plugin bundle${bundleCount === 1 ? "" : "s"}, which update themselves` : ""
+    }. Untick anything you'd rather keep to yourself, and mark anything you didn't write.</p>` +
+    found.map((f, i) => `
+      <div class="found-item" data-i="${i}" data-on="${f.on}" data-open="${f.open}">
+        <div class="found-head">
+          <label style="display:flex;align-items:baseline;gap:9px;cursor:pointer">
+            <input type="checkbox" data-check="${i}" ${f.on ? "checked" : ""}>
+            <span class="found-name">${esc(f.id)}</span>
+          </label>
+          ${f.warnings.length ? `<span class="found-why warn">${esc(f.warnings.join("; "))}</span>` : ""}
+          <select data-kind="${i}" aria-label="Who wrote ${esc(f.id)}">
+            <option value="authored"${f.kind === "authored" ? " selected" : ""}>I wrote it</option>
+            <option value="external"${f.kind === "external" ? " selected" : ""}>Found elsewhere</option>
+          </select>
+          <select data-disc="${i}" aria-label="Discipline for ${esc(f.id)}">
+            <option value="">Work it out for me</option>
+            ${DISCIPLINES.map(d => `<option value="${esc(d.id)}"${f.discipline === d.id ? " selected" : ""}>${esc(d.label)}</option>`).join("")}
+          </select>
+        </div>
+        <button class="found-more" data-more="${i}">${f.about ? "Edit description" : "Add a description"}</button>
+        <textarea data-about="${i}" rows="3"
+          placeholder="What does it do? One plain sentence, then a bit more if it helps.">${esc(f.about)}</textarea>
+        <div class="hint">Write it for someone who isn't an engineer. Say what it gets you, not how it works. You can leave it and add one later.</div>
+      </div>`).join("");
+
+  $("add-build").disabled = false;
+  updateStatus();
+}
+
+function updateStatus() {
+  const on = found.filter(f => f.on).length;
+  const missing = found.filter(f => f.on && !f.about.trim()).length;
+  $("add-status").textContent = !on
+    ? "Nothing selected"
+    : on + " selected" + (missing ? " \u00b7 " + missing + " with no description yet" : "");
+  const b = $("add-build");
+  if (b) b.textContent = BACKEND ? "Publish to the hub" : "Build my folder";
+}
+
+function buildFolder() {
+  const name = $("add-name").value.trim();
+  const team = $("add-team").value.trim();
+  const id = slugId(name);
+
+  if (!id) { $("add-status").textContent = "Enter your name first"; $("add-name").focus(); return; }
+
+  const picked = found.filter(f => f.on);
+  if (!picked.length) { $("add-status").textContent = "Tick at least one skill"; return; }
+
+  // With the backend up this goes straight into the hub. Without it, the same
+  // set comes back as one correctly shaped folder to drag in.
+  if (BACKEND) {
+    $("add-build").disabled = true;
+    $("add-status").textContent = "Publishing " + picked.length + "...";
+    callBackend("publishSkills", {
+      person: id,
+      display_name: name,
+      team: team,
+      skills: picked.map(f => ({
+        id: f.id, skillMd: f.text, about: f.about.trim(), mmd: f.mmd || "",
+        kind: f.kind, discipline: f.discipline,
+        source: f.kind === "external" ? "external" : ""
+      }))
+    }).then(res => {
+      $("add-build").disabled = false;
+      if (!res || !res.ok) {
+        $("add-status").textContent = (res && res.message) || "Could not publish";
+        return;
+      }
+      let msg = res.message;
+      if (res.skipped && res.skipped.length) msg += " Skipped: " + res.skipped.join("; ");
+      $("add-status").textContent = msg + " Updating the map...";
+
+      // Read the hub back rather than guessing what it now holds. The server
+      // works out each skill's discipline, and a description parsed here would
+      // not always agree with the one everyone else sees.
+      refreshFromHub().then(ok => {
+        $("add-status").textContent = ok
+          ? msg + " They are on the map now."
+          : msg + " Reload to see them.";
+      });
+    }).catch(err => {
+      $("add-build").disabled = false;
+      $("add-status").textContent = "Publish failed: " + (err && err.message ? err.message : "unknown");
+    });
+    return;
+  }
+
+  const files = [{
+    path: "skills/" + id + "/profile.json",
+    text: JSON.stringify({
+      display_name: name, team,
+      installed: [], forked: [],
+      external: picked.filter(f => f.kind === "external").map(f => ({
+        skill: f.id, source: "external", captured: new Date().toISOString().slice(0, 10)
+      })),
+      disciplines: Object.fromEntries(picked.filter(f => f.discipline).map(f => [f.id, f.discipline])),
+      updated_at: new Date().toISOString().slice(0, 10)
+    }, null, 2) + "\n"
+  }];
+
+  for (const f of picked) {
+    files.push({ path: "skills/" + id + "/" + f.id + "/SKILL.md", text: f.text });
+    if (f.about.trim()) files.push({ path: "skills/" + id + "/" + f.id + "/about.md", text: f.about.trim() + "\n" });
+    if (f.mmd) files.push({ path: "skills/" + id + "/" + f.id + "/diagram.mmd", text: f.mmd + "\n" });
+  }
+
+  const url = URL.createObjectURL(makeZip(files));
+  const a = document.createElement("a");
+  a.href = url; a.download = id + "-skills.zip";
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  setTimeout(() => URL.revokeObjectURL(url), 4000);
+
+  $("add-status").innerHTML =
+    "Downloaded. Unzip it, then drag the <strong>" + esc(id) + "</strong> folder into <strong>skills/</strong> in the hub.";
+}
+
+const CLAUDE_PROMPT = `I want to publish my Claude skills so my colleagues can find them.
+
+The hub is a shared folder with one folder per person, laid out as:
+skills/<my-name>/<skill-name>/SKILL.md
+
+Please:
+1. Look through my skills folder and work out which skills I actually wrote,
+   versus ones that came with Claude or arrived through a plugin. Never publish
+   plugin bundles - they get overwritten when their plugin updates.
+2. Show me the list and let me choose. Don't decide for me.
+3. Before anything leaves my machine, check each skill I picked for anything
+   confidential - credentials, customer or prospect names, pricing, internal
+   URLs - and show me exactly what you found.
+4. For each one, write a short plain-language overview into about.md beside the
+   SKILL.md. Write it for a colleague who is not an engineer: say what the skill
+   gets you, not how it works. Show me before finalising.
+5. Put it all in a folder I can drag into the hub, and tell me where it is.
+
+If a skill is good but I didn't write it, publish it as external and record
+where it came from plus one line on why I use it.`;
+
+function openAdd() {
+  $("add-panel").dataset.open = "true";
+  $("add-panel").setAttribute("aria-hidden", "false");
+  $("scrim").dataset.open = "true";
+  $("add-close").focus();
+}
+
+function closeAdd() {
+  $("add-panel").dataset.open = "false";
+  $("add-panel").setAttribute("aria-hidden", "true");
+  if ($("panel").dataset.open !== "true") $("scrim").dataset.open = "false";
+}
+
+$("add-team").innerHTML = `<option value="">Pick your team</option>` +
+  DEPARTMENTS.map(d => `<option value="${esc(d)}">${esc(d)}</option>`).join("");
+
+$("add-open").addEventListener("click", openAdd);
+$("add-close").addEventListener("click", closeAdd);
+$("copy-prompt").addEventListener("click", e => copy(CLAUDE_PROMPT, e.target, "Copy the instruction"));
+$("pick-btn").addEventListener("click", () => $("pick").click());
+$("pick").addEventListener("change", e => onPick(e.target.files));
+$("pick-files-btn").addEventListener("click", () => $("pick-files").click());
+$("pick-files").addEventListener("change", e => onPick(e.target.files));
+
+const drop = $("drop");
+["dragenter", "dragover"].forEach(ev => drop.addEventListener(ev, e => {
+  e.preventDefault(); drop.dataset.over = "true";
+}));
+["dragleave", "drop"].forEach(ev => drop.addEventListener(ev, e => {
+  e.preventDefault(); drop.dataset.over = "false";
+}));
+drop.addEventListener("drop", async e => {
+  const items = await filesFromDrop(e.dataTransfer);
+  if (items.length) onPick(items);
+  else $("add-status").textContent = "That did not look like a folder of skills.";
+});
+
+$("bulk").addEventListener("click", e => {
+  const b = e.target.closest("[data-bulk]");
+  if (!b) return;
+  const what = b.dataset.bulk;
+  for (const f of found) {
+    if (what === "all") f.on = true;
+    else if (what === "none") f.on = false;
+    else if (what === "mine") f.kind = "authored";
+    else if (what === "ext") f.kind = "external";
+  }
+  renderFound(0);
+});
+$("add-build").addEventListener("click", buildFolder);
+
+$("found").addEventListener("change", e => {
+  const cb = e.target.closest("[data-check]");
+  if (!cb) return;
+  const i = +cb.dataset.check;
+  found[i].on = cb.checked;
+  document.querySelector(`.found-item[data-i="${i}"]`).dataset.on = String(cb.checked);
+  updateStatus();
+});
+
+$("found").addEventListener("change", e => {
+  const disc = e.target.closest("[data-disc]");
+  if (disc) { found[+disc.dataset.disc].discipline = disc.value; return; }
+  const kind = e.target.closest("[data-kind]");
+  if (kind) { found[+kind.dataset.kind].kind = kind.value; }
+});
+
+$("found").addEventListener("click", e => {
+  const more = e.target.closest("[data-more]");
+  if (!more) return;
+  const i = +more.dataset.more;
+  found[i].open = !found[i].open;
+  document.querySelector(`.found-item[data-i="${i}"]`).dataset.open = String(found[i].open);
+});
+
+$("found").addEventListener("input", e => {
+  const ta = e.target.closest("[data-about]");
+  if (!ta) return;
+  found[+ta.dataset.about].about = ta.value;
+  updateStatus();
+});
+
+render();
+loadIdentity();
+</script>
+</body>
+</html>

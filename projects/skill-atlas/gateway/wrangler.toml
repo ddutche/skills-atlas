@@ -1,0 +1,21 @@
+name = "skill-atlas-gateway"
+main = "src/index.ts"
+compatibility_date = "2026-08-11"
+
+# No KV, no D1, no Durable Objects. All state lives in Postgres behind the Edge
+# Function, which keeps this Worker credential-free and keeps the whole thing
+# inside Cloudflare's free tier — KV's free plan allows only 1,000 writes a day,
+# and OAuth codes would brush against that.
+
+[vars]
+# Public, non-secret configuration. Secrets go in with `wrangler secret put`
+# and are listed in DEPLOY.md — never here, this file is committed.
+HUB_URL = "https://overmssglaikxnwtfvoc.supabase.co/functions/v1/hub"
+
+# Leave unset for a personal install (any Google account may sign in).
+# Set to a comma-separated list to lock a company hub to its own domains:
+#   ALLOWED_DOMAINS = "example.com,example.co.uk"
+# ALLOWED_DOMAINS = ""
+
+[observability]
+enabled = true

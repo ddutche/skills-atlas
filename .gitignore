@@ -1,2 +1,6 @@
 .claude/settings.local.json
 .DS_Store
+
+# The old employer-branded copy of the hub. Stays on disk, never committed:
+# anything put into git history is permanent even if deleted in a later commit.
+projects/skills-hub/
